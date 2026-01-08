@@ -4,10 +4,10 @@ from models import User
 from db_connect import get_db_session
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select,delete
 from uuid import UUID
 from users.services import get_all_users,get_password_hash, verify_password, generate_jwt_token, verify_jwt_token
-from users.dependencies import get_current_user
+from dependencies import get_current_user
 
 router = APIRouter()
 
@@ -91,7 +91,8 @@ async def edit_user(
     user_id: UUID | None = None,
     current_user: dict = Depends(get_current_user),
 ):
-    print("Current Role:",current_user["role"])
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id required")
     if current_user["role"] == RoleEnum.superadmin:
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalars().first()
@@ -134,6 +135,33 @@ async def edit_user(
             "user_id" : user.id
         }
     raise HTTPException(
-        detail="No Access",
+        detail="Not Authorized",
         status_code=status.HTTP_403_FORBIDDEN
     )
+
+@router.delete("/user")
+async def delete_user(    
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_id: UUID | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["role"] != RoleEnum.superadmin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id required")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
+    
+    stmt = delete(User).where(User.id == user_id)
+    await db.execute(stmt)
+    await db.commit()
+
+    return {"message": f"User {user_id} deleted successfully"}
