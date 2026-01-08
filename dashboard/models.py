@@ -1,5 +1,5 @@
 from sqlalchemy.orm import  DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String,Date,func, DateTime, Table, ForeignKey, Column
+from sqlalchemy import String,Date,func, DateTime, Table, ForeignKey, Column, Boolean
 from datetime import date,datetime
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -23,7 +23,9 @@ user_event_association = Table(
         ForeignKey("events.id", ondelete="CASCADE"),
         primary_key=True
     ),
+    Column("is_winner", Boolean, default=False)
 )
+
 class Mixins:
     __abstract__ = True
 
