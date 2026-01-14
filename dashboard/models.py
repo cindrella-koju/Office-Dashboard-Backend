@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     UniqueConstraint,
     func,
+    PrimaryKeyConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import date, datetime
@@ -81,6 +82,12 @@ class User(Mixins, Base):
         cascade="all, delete-orphan",
     )
 
+    column_values: Mapped[list["ColumnValues"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     def __repr__(self):
         return f"<User id={self.id} username={self.username}>"
 
@@ -136,6 +143,12 @@ class Stage(Mixins, Base):
         lazy="selectin",
     )
 
+    columns: Mapped[list["StandingColumn"]] = relationship(
+        back_populates="stage",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     def __repr__(self):
         return f"<Stage id={self.id} name={self.name}>"
 
@@ -184,3 +197,52 @@ class GroupMembers(Mixins, Base):
 
     def __repr__(self):
         return f"<GroupMembers user_id={self.user_id} group_id={self.group_id}>"
+
+
+class StandingColumn(Mixins, Base):
+    __tablename__ = "standingcolumns"
+
+    stage_id : Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("stages.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    column_field : Mapped[str] = mapped_column(String(255), nullable=False)
+
+    stage: Mapped["Stage"] = relationship(back_populates="columns", lazy="selectin")
+
+    values: Mapped[list["ColumnValues"]] = relationship(
+        back_populates="column",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def __repr__(self):
+        return f"<Standing Column id={self.id} filed={self.column_field}>"
+    
+class ColumnValues(Mixins,Base):
+    __tablename__ = "columnvalues"
+
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    column_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("standingcolumns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    value : Mapped[str] = mapped_column(String(60),nullable=False)
+    
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "user_id",
+            "column_id",
+            name="pk_columnvalues",
+        ),
+    )
+    user: Mapped["User"] = relationship(back_populates="column_values", lazy="selectin")
+    column: Mapped["StandingColumn"] = relationship(back_populates="values", lazy="selectin")
+
+    def __repr__(self):
+        return f"<Column Value value={self.value}>"

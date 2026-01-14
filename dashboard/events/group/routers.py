@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from events.group.schema import GroupDetail, GroupUpdate, AddGroupMember
-from models import Group, GroupMembers, User
+from models import Group, GroupMembers, User,StandingColumn, ColumnValues
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 from sqlalchemy import select, delete
@@ -50,24 +50,34 @@ async def retrieve_group(
     group_id: UUID | None = None,
 ):
     try:
-        stmt = select(
-            Group.id.label("group_id"),
-            Group.name.label("group_name"),
-            User.id.label("user_id"),
-            User.username.label("username")
-        ).join(
-            GroupMembers, Group.id == GroupMembers.group_id
-        ).join(
-            User, GroupMembers.user_id == User.id
+        gm = GroupMembers
+        g = Group
+        u = User
+        sc = StandingColumn
+        cv = ColumnValues
+
+        stmt = (
+            select(
+                g.id.label("group_id"),
+                g.name.label("group_name"),
+                u.id.label("user_id"),
+                u.username.label("username"),
+                sc.id.label("column_id"),
+                sc.column_field,
+                cv.value
+            )
+            .join(gm, g.id == gm.group_id)
+            .join(u, gm.user_id == u.id)
+            .join(sc, sc.stage_id == g.stage_id)  # all columns for the group's stage
+            .outerjoin(cv, (cv.user_id == u.id) & (cv.column_id == sc.id))  # LEFT JOIN for values
         )
 
         if group_id:
-            stmt = stmt.where(Group.id == group_id)
+            stmt = stmt.where(g.id == group_id)
 
         result = await db.execute(stmt)
         rows = result.all()
 
-        # Convert to structured response
         group_dict = {}
         for row in rows:
             gid = row.group_id
@@ -75,12 +85,25 @@ async def retrieve_group(
                 group_dict[gid] = {
                     "group_id": row.group_id,
                     "group_name": row.group_name,
-                    "members": []
+                    "members": {}
                 }
-            group_dict[gid]["members"].append({
-                "user_id": row.user_id,
-                "username": row.username
+
+            uid = row.user_id
+            if uid not in group_dict[gid]["members"]:
+                group_dict[gid]["members"][uid] = {
+                    "user_id": row.user_id,
+                    "username": row.username,
+                    "columns": []
+                }
+
+            group_dict[gid]["members"][uid]["columns"].append({
+                "column_id": row.column_id,
+                "column_field": row.column_field,
+                "value": row.value
             })
+
+        for gdata in group_dict.values():
+            gdata["members"] = list(gdata["members"].values())
 
         return list(group_dict.values())
 
