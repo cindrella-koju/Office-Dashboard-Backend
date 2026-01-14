@@ -59,30 +59,30 @@ async def login_user(user : LoginUser, db: Annotated[AsyncSession, Depends(get_d
 async def retrieve_user(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID | None = None,
-    current_user: dict = Depends(get_current_user),
+    # current_user: dict = Depends(get_current_user),
 ):  
-    if current_user["role"] == RoleEnum.superadmin or current_user["role"] == RoleEnum.admin:
-        if user_id:
-            result = await db.execute(select(User).where(User.id == user_id))
-            user = result.scalars().first()
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="User not found"
-                )
-            return UserDetailResponse(**user.__dict__)
-        else:
-            users = await get_all_users(db=db)
-            if not users:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="No users found"
-                )
-            return [UserDetailResponse(**user.__dict__) for user in users]
-    raise HTTPException(
-        detail="No Access",
-        status_code=status.HTTP_403_FORBIDDEN
-    )
+    # if current_user["role"] == RoleEnum.superadmin or current_user["role"] == RoleEnum.admin:
+    if user_id:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        return UserDetailResponse(**user.__dict__)
+    else:
+        users = await get_all_users(db=db)
+        if not users:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No users found"
+            )
+        return [UserDetailResponse(**user.__dict__) for user in users]
+    # raise HTTPException(
+    #     detail="No Access",
+    #     status_code=status.HTTP_403_FORBIDDEN
+    # )
 
 @router.patch("")
 async def edit_user(    
@@ -165,3 +165,15 @@ async def delete_user(
     await db.commit()
 
     return {"message": f"User {user_id} deleted successfully"}
+
+# @router.get("/")
+# async def generate_field(page:str):
+#     if page == "event":
+#         return(
+#             "title" : "string"
+#             "description" : "string or none",
+#             "start date": "date",
+#             "end date" : "date",
+#             "status" : ["draft","active","completed"],
+#             "progress_note" : "string or none"
+#         )

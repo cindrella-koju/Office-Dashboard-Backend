@@ -9,39 +9,42 @@ from dependencies import get_current_user
 from uuid import UUID
 from events.services import extract_all_event, extract_one_event
 from sqlalchemy import select, delete
-
+from events.stage.routers import router as state_router
+from events.group.routers import router as group_router
 router = APIRouter()
+router.include_router(state_router,prefix="/stage",tags=["Stage"])
+router.include_router(group_router,prefix="/group",tags=["Group"])
 
 @router.post("")
 async def create_event( 
     event : EventDetail, 
     db : Annotated[AsyncSession,Depends(get_db_session)],
-    current_user: dict = Depends(get_current_user),
+    # current_user: dict = Depends(get_current_user),
 ):
-    if current_user["role"] == RoleEnum.superadmin and current_user["role"] == RoleEnum.admin:
-        event_description, event_progress_note = "", ""
-        if event.description:
-            event_description = event.description
+    # if current_user["role"] == RoleEnum.superadmin and current_user["role"] == RoleEnum.admin:
+    event_description, event_progress_note = "", ""
+    if event.description:
+        event_description = event.description
 
-        if event.progress_note:
-            event_progress_note = event.progress_note
+    if event.progress_note:
+        event_progress_note = event.progress_note
 
-        new_event = Event(
-            title = event.title,
-            description = event_description,
-            startdate = event.startdate,
-            enddate = event.enddate,
-            status = StatusEnum(event.status),
-            progress_note = event_progress_note
-        )
+    new_event = Event(
+        title = event.title,
+        description = event_description,
+        startdate = event.startdate,
+        enddate = event.enddate,
+        status = StatusEnum(event.status),
+        progress_note = event_progress_note
+    )
 
-        db.add(new_event)
-        await db.commit()
-        return{
-            "message" : "Event Added successfully",
-            "id" : new_event.id
+    db.add(new_event)
+    await db.commit()
+    return{
+        "message" : "Event Added successfully",
+        "id" : new_event.id
         }
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    # raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
 @router.get("")
 async def retrieve_event(
@@ -142,3 +145,6 @@ async def delete_event(
     return {
         "message" : f"User {event_id} deleted successfully"
     }
+
+
+# async def test_get_events():

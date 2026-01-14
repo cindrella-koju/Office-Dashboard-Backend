@@ -3,6 +3,7 @@ from datetime import date
 from enum import Enum
 from uuid import UUID
 from datetime import datetime
+from typing import Optional
 
 class StatusEnum(str,Enum):
     draft = "draft"
@@ -22,7 +23,7 @@ class EditEventDetail(BaseModel):
     description : str | None = None
     startdate : date | None = None
     enddate : date | None = None
-    status : StatusEnum | None = None
+    status :Optional[StatusEnum] = None
     progress_note : str | None = None
 
 class EventDetailResponse(EventDetail):
