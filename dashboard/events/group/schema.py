@@ -3,9 +3,9 @@ from uuid import UUID
 from typing import Optional, List
 
 class GroupDetail(BaseModel):
-    stage_id : UUID
+    round_id : UUID
     name : str
-    user_id : List[UUID]
+    participants_id : List[UUID]
 
 class EditGroupDetail(BaseModel):
     stage_id : Optional[UUID] = None

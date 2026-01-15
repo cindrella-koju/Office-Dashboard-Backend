@@ -12,11 +12,13 @@ from sqlalchemy import select, delete
 from events.stage.routers import router as state_router
 from events.group.routers import router as group_router
 from events.standingcolumn.routers import router as column_router
+from events.tiesheet.routers import router as tiesheet_router
 
 router = APIRouter()
 router.include_router(state_router,prefix="/stage",tags=["Stage"])
 router.include_router(group_router,prefix="/group",tags=["Group"])
 router.include_router(column_router,prefix="/column",tags=["Column"])
+router.include_router(tiesheet_router, prefix="/tiesheet",tags=["Tiesheet"])
 
 @router.post("")
 async def create_event( 

@@ -10,10 +10,11 @@ from sqlalchemy import (
     Integer,
     UniqueConstraint,
     func,
-    PrimaryKeyConstraint
+    PrimaryKeyConstraint,
+    Time
 )
 from sqlalchemy.dialects.postgresql import UUID
-from datetime import date, datetime
+from datetime import date, datetime, time
 import uuid
 
 
@@ -143,6 +144,12 @@ class Stage(Mixins, Base):
         lazy="selectin",
     )
 
+    tiesheets: Mapped[list["Tiesheet"]] = relationship(
+        back_populates="stage",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     columns: Mapped[list["StandingColumn"]] = relationship(
         back_populates="stage",
         cascade="all, delete-orphan",
@@ -166,6 +173,12 @@ class Group(Mixins, Base):
     stage: Mapped["Stage"] = relationship(back_populates="groups", lazy="selectin")
 
     members: Mapped[list["GroupMembers"]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    tiesheets: Mapped[list["Tiesheet"]] = relationship(
         back_populates="group",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -246,3 +259,73 @@ class ColumnValues(Mixins,Base):
 
     def __repr__(self):
         return f"<Column Value value={self.value}>"
+
+
+# Need to add state ie: completed, upcoming... 
+class Tiesheet(Mixins, Base):
+    __tablename__ = "tiesheets"
+
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("groups.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    stage_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("stages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    scheduled_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+    )
+
+    scheduled_time: Mapped[time] = mapped_column(
+        Time,
+        nullable=False,
+    )
+
+    players: Mapped[list["TiesheetPlayer"]] = relationship(
+        back_populates="tiesheet",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    group: Mapped["Group"] = relationship(back_populates="tiesheets", lazy="selectin")
+    stage: Mapped["Stage"] = relationship(back_populates="tiesheets", lazy="selectin")
+
+    def __repr__(self):
+        return f"<Tiesheet id={self.id} scheduled_at={self.scheduled_at}>"
+
+
+class TiesheetPlayer(Base):
+    __tablename__ = "tiesheet_players"
+
+    tiesheet_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tiesheets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    tiesheet: Mapped["Tiesheet"] = relationship(back_populates="players", lazy="selectin")
+    user: Mapped["User"] = relationship(lazy="selectin")
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    def __repr__(self):
+        return f"<TiesheetPlayer tiesheet_id={self.tiesheet_id} user_id={self.user_id} winner={self.is_winner}>"

@@ -16,7 +16,7 @@ async def create_group(
 ):
     try:
         new_group = Group(
-            stage_id=group.stage_id,
+            stage_id=group.round_id,
             name=group.name
         )
 
@@ -25,7 +25,7 @@ async def create_group(
 
         members = [
                 GroupMembers(group_id=new_group.id, user_id=user_id)
-                for user_id in group.user_id
+                for user_id in group.participants_id
             ]
         db.add_all(members)
 
@@ -34,7 +34,7 @@ async def create_group(
         return {
             "message": "Group added Successfully",
             "id": new_group.id,
-            "members" : [user_id for user_id in group.user_id]
+            "members" : [user_id for user_id in group.participants_id]
         }
     except SQLAlchemyError as e:
         await db.rollback()
@@ -42,7 +42,6 @@ async def create_group(
             "message": "Failed to add group",
             "error": str(e)
         }
-
 
 @router.get("")
 async def retrieve_group(
@@ -160,7 +159,7 @@ async def delete_group(
         "message" : f"Group {group_id} deleted successfully"
     }
     
-@router.post("")
+@router.post("/player")
 async def add_group_member(
     group_member_detail : AddGroupMember,
     db: Annotated[AsyncSession, Depends(get_db_session)]

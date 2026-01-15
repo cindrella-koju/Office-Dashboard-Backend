@@ -15,10 +15,10 @@ router = APIRouter()
 async def create_participants(
     participant : Participants, 
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    current_user: dict = Depends(get_current_user)
+    # current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role"] != RoleEnum.superadmin and current_user["role"] != RoleEnum.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    # if current_user["role"] != RoleEnum.superadmin and current_user["role"] != RoleEnum.admin:
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     
     stmt = insert(user_event_association).values(
         user_id=participant.user_id,
