@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
-from models import Event
+from models import Event, Stage, StandingColumn
 from dependencies import get_current_user
 from uuid import UUID
 from events.services import extract_all_event, extract_one_event
@@ -13,6 +13,7 @@ from events.stage.routers import router as state_router
 from events.group.routers import router as group_router
 from events.standingcolumn.routers import router as column_router
 from events.tiesheet.routers import router as tiesheet_router
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
 router.include_router(state_router,prefix="/stage",tags=["Stage"])
@@ -26,28 +27,57 @@ async def create_event(
     db : Annotated[AsyncSession,Depends(get_db_session)],
     # current_user: dict = Depends(get_current_user),
 ):
-    # if current_user["role"] == RoleEnum.superadmin and current_user["role"] == RoleEnum.admin:
-    event_description, event_progress_note = "", ""
-    if event.description:
-        event_description = event.description
+    # if current_user["role"] == RoleEnum.superadmin and current_user["role"] == RoleEnum.admin
+    try:
+        new_event = Event(
+            title=event.title,
+            description=event.description or "",
+            startdate=event.startdate,
+            enddate=event.enddate,
+            status=StatusEnum(event.status),
+            progress_note=event.progress_note or "",
+        )
 
-    if event.progress_note:
-        event_progress_note = event.progress_note
+        db.add(new_event)
+        await db.flush()  # ensures new_event.id exists
 
-    new_event = Event(
-        title = event.title,
-        description = event_description,
-        startdate = event.startdate,
-        enddate = event.enddate,
-        status = StatusEnum(event.status),
-        progress_note = event_progress_note
-    )
+        new_round = Stage(
+            event_id=new_event.id,
+            name="Round 1",
+            round_order=1
+        )
+        db.add(new_round)
+        await db.flush()  # ensures new_round.id exists
 
-    db.add(new_event)
-    await db.commit()
-    return{
-        "message" : "Event Added successfully",
-        "id" : new_event.id
+        default_standing_col = [
+            {"column_field": "Match Played", "default_value": "0"},
+            {"column_field": "Win", "default_value": "0"},
+            {"column_field": "Loss", "default_value": "0"},
+            {"column_field": "Draw", "default_value": "0"},
+            {"column_field": "Points", "default_value": "0"},
+        ]
+
+        new_standing_columns = [
+            StandingColumn(
+                stage_id=new_round.id,
+                column_field=col["column_field"],
+                default_value=col["default_value"]
+            )
+            for col in default_standing_col
+        ]
+
+        db.add_all(new_standing_columns)
+        await db.commit()
+
+        return {
+            "message": "Event added successfully",
+            "id": new_event.id
+        }
+    except SQLAlchemyError as e:
+        await db.rollback()
+        return {
+            "message": "Failed to add Event",
+            "error": str(e)
         }
     # raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 

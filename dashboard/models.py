@@ -89,6 +89,10 @@ class User(Mixins, Base):
         lazy="selectin",
     )
 
+    qualifiers: Mapped[list["Qualifier"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
     def __repr__(self):
         return f"<User id={self.id} username={self.username}>"
 
@@ -114,7 +118,10 @@ class Event(Mixins, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-
+    qualifiers: Mapped[list["Qualifier"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<Event id={self.id} title={self.title}>"
@@ -155,7 +162,10 @@ class Stage(Mixins, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-
+    qualifiers: Mapped[list["Qualifier"]] = relationship(
+        back_populates="stage",
+        cascade="all, delete-orphan",
+    )
     def __repr__(self):
         return f"<Stage id={self.id} name={self.name}>"
 
@@ -229,6 +239,8 @@ class StandingColumn(Mixins, Base):
         lazy="selectin",
     )
 
+    default_value : Mapped[str] = mapped_column(String(60), nullable=True)
+    
     def __repr__(self):
         return f"<Standing Column id={self.id} filed={self.column_field}>"
     
@@ -247,6 +259,7 @@ class ColumnValues(Mixins,Base):
 
     value : Mapped[str] = mapped_column(String(60),nullable=False)
     
+
     __table_args__ = (
         PrimaryKeyConstraint(
             "user_id",
@@ -284,6 +297,8 @@ class Tiesheet(Mixins, Base):
         Time,
         nullable=False,
     )
+
+    status : Mapped[str] = mapped_column(String(20),nullable=True)
 
     players: Mapped[list["TiesheetPlayer"]] = relationship(
         back_populates="tiesheet",
@@ -329,3 +344,32 @@ class TiesheetPlayer(Base):
 
     def __repr__(self):
         return f"<TiesheetPlayer tiesheet_id={self.tiesheet_id} user_id={self.user_id} winner={self.is_winner}>"
+    
+class Qualifier(Mixins, Base):
+    __tablename__ = "qualifier"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=False
+    )
+    stage_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("stages.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id",
+            "stage_id",
+            "user_id",
+            name="uq_qualifier_event_stage_user",
+        ),
+    )
+
+    event: Mapped["Event"] = relationship(back_populates="qualifiers")
+    stage: Mapped["Stage"] = relationship(back_populates="qualifiers")
+    user: Mapped["User"] = relationship(back_populates="qualifiers")
+
+    def __repr__(self):
+        return f"<Qualifier id={self.id}>"

@@ -13,8 +13,20 @@ class EditGroupDetail(BaseModel):
 
 class GroupUpdate(BaseModel):
     name: str | None = None
-    stage_id: int | None = None
+    stage_id: UUID | None = None
+    participants_id: List[UUID] | None = None
 
 class AddGroupMember(BaseModel):
     group_id : UUID
     user_id : UUID
+
+class ColumnValueUpdate(BaseModel):
+    column_id: UUID
+    value: str | None
+
+class MemberColumnUpdate(BaseModel):
+    user_id: UUID
+    columns: List[ColumnValueUpdate]
+
+class GroupTableUpdate(BaseModel):
+    members: List[MemberColumnUpdate]

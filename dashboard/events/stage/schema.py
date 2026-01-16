@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel,ConfigDict
+from typing import List
 import uuid
 from typing import Optional
 
@@ -17,3 +18,10 @@ class CreateStateForm(BaseModel):
 
 class StageResponse(StageDetail):
     id : uuid.UUID
+
+
+class RoundInfo(BaseModel):
+    id : uuid.UUID
+    name :  str
+
+    model_config = ConfigDict(from_attributes=True)
