@@ -105,10 +105,12 @@ async def retrieve_tiesheet(
         )
         .join(tp, tp.tiesheet_id == t.id)
         .join(s, s.id == t.stage_id)
-        .join(u,u.id == tp.user_id)
-        .outerjoin(g, g.id == t.group_id)  # Use outer join so tiesheet without group is included
+        .join(e, e.id == s.event_id)
+        .join(u, u.id == tp.user_id)
+        .outerjoin(g, g.id == t.group_id)
         .where(e.id == event_id)
     )
+
 
     if stage_id:
         stmt = stmt.where(t.stage_id == stage_id)

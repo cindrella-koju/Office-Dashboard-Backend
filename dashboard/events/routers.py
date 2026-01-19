@@ -13,6 +13,7 @@ from events.stage.routers import router as state_router
 from events.group.routers import router as group_router
 from events.standingcolumn.routers import router as column_router
 from events.tiesheet.routers import router as tiesheet_router
+from events.qualifier.routers import router as qualifier_router
 from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
@@ -20,6 +21,7 @@ router.include_router(state_router,prefix="/stage",tags=["Stage"])
 router.include_router(group_router,prefix="/group",tags=["Group"])
 router.include_router(column_router,prefix="/column",tags=["Column"])
 router.include_router(tiesheet_router, prefix="/tiesheet",tags=["Tiesheet"])
+router.include_router(qualifier_router, prefix="/qualifier",tags=["Qualifier"])
 
 @router.post("")
 async def create_event( 
@@ -108,14 +110,14 @@ async def edit_user(
     event_detail : EditEventDetail,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     event_id: UUID | None = None,
-    current_user: dict = Depends(get_current_user),
+    # current_user: dict = Depends(get_current_user),
 ):
-    print("Role:",RoleEnum(current_user["role"]))
+    # print("Role:",RoleEnum(current_user["role"]))
     if not event_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="event_id required")
     
-    if current_user["role"] != RoleEnum.superadmin and current_user["role"] != RoleEnum.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    # if current_user["role"] != RoleEnum.superadmin and current_user["role"] != RoleEnum.admin:
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     
     result = await db.execute(select(Event).where(Event.id == event_id))
     event = result.scalars().first()

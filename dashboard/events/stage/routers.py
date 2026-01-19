@@ -10,9 +10,9 @@ from db_connect import get_db_session
 router = APIRouter()
 
 @router.post("")
-async def create_stage(stage : StageDetail,  db : Annotated[AsyncSession,Depends(get_db_session)]):
+async def create_stage(event_id : UUID,stage : StageDetail,  db : Annotated[AsyncSession,Depends(get_db_session)]):
     new_state = Stage(
-        event_id = stage.event_id,
+        event_id = event_id,
         name = stage.name,
         round_order = stage.round_order
     )
@@ -54,6 +54,7 @@ async def edit_stage(
 
 @router.get("")
 async def retrieve_stage(
+    event_id : UUID,
     db: Annotated[AsyncSession,Depends(get_db_session)],
     stage_id: UUID | None = None,
 ):
@@ -67,7 +68,7 @@ async def retrieve_stage(
             )
         return StageResponse(**stage.__dict__)
     else:
-        result = await db.execute(select(Stage))
+        result = await db.execute(select(Stage).where(Stage.event_id == event_id))
         stages = result.scalars().all()
         if not stages:
             raise HTTPException(

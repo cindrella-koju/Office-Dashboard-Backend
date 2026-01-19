@@ -44,7 +44,19 @@ async def create_group(
         }
 
 
-# async def extractStandingColumn():
+@router.get("/info/{stage_id}")
+async def extract_group_by_event(stage_id:UUID,db: Annotated[AsyncSession, Depends(get_db_session)]):
+    stmt = select(Group.id,Group.name).where(Group.stage_id == stage_id)
+    result = await db.execute(stmt)
+    group_info = result.all()
+
+    return [
+        {
+            "id" :  group.id,
+            "groupname" : group.name
+        }
+        for group in group_info
+    ]
 
 @router.get("")
 async def retrieve_group(

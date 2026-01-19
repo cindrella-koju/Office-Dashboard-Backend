@@ -4,7 +4,6 @@ import uuid
 from typing import Optional
 
 class StageDetail(BaseModel):
-    event_id : uuid.UUID
     name : str
     round_order : int
 

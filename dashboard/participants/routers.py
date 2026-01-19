@@ -1,4 +1,4 @@
-from models import user_event_association, User, Event, GroupMembers, Event, Stage, Group, StandingColumn, ColumnValues
+from models import user_event_association, User, Event, GroupMembers, Event, Stage, Group, StandingColumn, ColumnValues, Qualifier
 from fastapi import APIRouter, Depends, HTTPException, status
 from participants.schema import Participants, ParticipantsUserResponse, ParticipantsEventResponse, UserResponse
 from db_connect import get_db_session
@@ -59,11 +59,17 @@ async def create_participants(
             )
             for col_id, default_value in cols_and_vals
         ]
-
+        
+        #Add in Round 1 Qualifier
+        new_qulifier = Qualifier(
+            event_id = participant.event_id,
+            stage_id = stage_id,
+            user_id = participant.user_id
+        )
         # 5. Execute all in one transaction
         await db.execute(stmt)
         db.add_all(new_col_vals)
-
+        db.add(new_qulifier)
         await db.commit()
 
         return {"message": "Participant added successfully"}
@@ -74,6 +80,7 @@ async def create_participants(
             status_code=500,
             detail=f"Failed to add participant: {str(e)}"
         )
+
 
 
 @router.get("/event")
