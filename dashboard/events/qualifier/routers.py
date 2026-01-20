@@ -48,5 +48,22 @@ async def create_qualifier(event_id : UUID,stage_id:UUID,db: Annotated[AsyncSess
         "message" : "Qualifier created Succeddfully"
     }
 
-# async def retrieve_qualifier_by_event(event_id : UUID,db: Annotated[AsyncSession, Depends(get_db_session)]):
-#     stmt = 
+@router.get("/event")
+async def retrieve_qualifiers_by_event(
+    event_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)]
+):
+    stmt = (
+        select(
+            User.id.label("user_id"),
+            User.username,
+            Stage.name.label("round_name"),
+        )
+        .select_from(Qualifier)
+        .join(User, User.id == Qualifier.user_id)
+        .join(Stage, Stage.id == Qualifier.stage_id)
+        .where(Qualifier.event_id == event_id)
+    )
+
+    result = await db.execute(stmt)
+    return result.mappings().all()
