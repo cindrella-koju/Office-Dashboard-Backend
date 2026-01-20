@@ -109,6 +109,5 @@ async def rounds(db: Annotated[AsyncSession,Depends(get_db_session)], event_id :
 
     stageinfo = [RoundInfo.from_orm(stage) for stage in stages]
 
-    return {
-        "round":stageinfo,
-    }
+    return stageinfo
+

@@ -6,7 +6,7 @@ from dependencies import get_current_user
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from users.schema import RoleEnum
-from sqlalchemy import insert, select, exists
+from sqlalchemy import insert, select,and_, outerjoin
 from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -14,21 +14,30 @@ router = APIRouter()
 
 @router.post("")
 async def create_participants(
-    participant: Participants,
+    event_id: UUID,
+    participants: Participants,
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     try:
-        # 1. Insert participant into association table
-        stmt = insert(user_event_association).values(
-            user_id=participant.user_id,
-            event_id=participant.event_id,
-            is_winner=False,
+        # 1. Insert into user_event_association (bulk)
+        association_rows = [
+            {
+                "user_id": p,
+                "event_id": event_id,
+                "is_winner": False,
+            }
+            for p in participants.user_id
+        ]
+
+        await db.execute(
+            insert(user_event_association),
+            association_rows
         )
 
         # 2. Get stage_id for round 1
         result = await db.execute(
             select(Stage.id).where(
-                Stage.event_id == participant.event_id,
+                Stage.event_id == event_id,
                 Stage.round_order == 1
             )
         )
@@ -40,45 +49,48 @@ async def create_participants(
                 detail="Stage round 1 not found for this event"
             )
 
-        # 3. Get standing columns with default values
+        # 3. Get standing columns + default values
         result = await db.execute(
             select(
                 StandingColumn.id,
                 StandingColumn.default_value
             ).where(StandingColumn.stage_id == stage_id)
         )
-
         cols_and_vals = result.all()
 
-        # 4. Create ColumnValues records
+        # 4. Create ColumnValues for each user & column
         new_col_vals = [
             ColumnValues(
-                user_id=participant.user_id,
+                user_id=p,
                 column_id=col_id,
                 value=default_value
             )
+            for p in participants.user_id
             for col_id, default_value in cols_and_vals
         ]
-        
-        #Add in Round 1 Qualifier
-        new_qulifier = Qualifier(
-            event_id = participant.event_id,
-            stage_id = stage_id,
-            user_id = participant.user_id
-        )
-        # 5. Execute all in one transaction
-        await db.execute(stmt)
+
+        # 5. Create Round 1 qualifiers
+        new_qualifiers = [
+            Qualifier(
+                event_id=event_id,
+                stage_id=stage_id,
+                user_id=p
+            )
+            for p in participants.user_id
+        ]
+
         db.add_all(new_col_vals)
-        db.add(new_qulifier)
+        db.add_all(new_qualifiers)
+
         await db.commit()
 
-        return {"message": "Participant added successfully"}
+        return {"message": "Participants added successfully"}
 
     except SQLAlchemyError as e:
         await db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to add participant: {str(e)}"
+            detail=f"Failed to add participants: {str(e)}"
         )
 
 
@@ -163,6 +175,51 @@ async def retrieve_participants(event_id: UUID, db: Annotated[AsyncSession,Depen
     return{
         "participants" : participants
     }
+
+@router.get("/not-participants")
+async def retrieve_not_participants(event_id : UUID,  db: Annotated[AsyncSession,Depends(get_db_session)]):
+    participants = await extract_participants(event_id=event_id, db=db)
+    participant_ids = [p.id for p in participants]
+
+    stmt = select(User.id,User.username).where(User.id.notin_(participant_ids))
+    result = await db.execute(stmt)  
+    users = result.all()
+    return [
+        {
+            "id" : user.id,
+            "username" : user.username
+        }
+        for user in users
+    ]
+
+@router.get("/not_qualifier")
+async def retrieve_user_not_in_qualifier(stage_id : UUID,event_id : UUID,db: Annotated[AsyncSession,Depends(get_db_session)]):
+    p = user_event_association
+    u = User
+    q = Qualifier
+    
+    stmt = (select(u.id,u.username)
+            .join(p,p.c.user_id == u.id)
+            .outerjoin(
+                Qualifier,
+                and_(
+                    p.c.user_id == Qualifier.user_id,
+                    p.c.event_id == Qualifier.event_id,
+                    Qualifier.stage_id == stage_id
+                )
+            ).where(and_(Qualifier.id == None,p.c.event_id == event_id)))
+    result = await db.execute(stmt)
+    users = result.all()
+
+    print("Users:",users)
+    return [
+        {
+            "user_id" : q.id,
+            "username" : q.username
+        }
+        for q in users
+    ]
+
 
 @router.get("/not-in-group")
 async def participants_not_in_group(event_id: UUID, db: Annotated[AsyncSession,Depends(get_db_session)], group_id : UUID | None = None):

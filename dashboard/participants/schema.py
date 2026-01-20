@@ -3,8 +3,7 @@ from typing import List
 from uuid import UUID
 
 class Participants(BaseModel):
-    user_id : UUID
-    event_id : UUID
+    user_id : List[UUID]
 
 class ParticipantsEventResponse(BaseModel):
     user_id : UUID
@@ -29,6 +28,7 @@ class RoundInfo(BaseModel):
 class UserResponse(BaseModel):
     id : UUID
     username : str
+    email : str
 
     model_config = ConfigDict(from_attributes=True)
 
