@@ -1,12 +1,17 @@
-from pydantic import BaseModel
+from pydantic import BaseModel,ConfigDict
 from uuid import UUID
 
 class CreateColumn(BaseModel):
     stage_id : UUID
     column_field : str
+    default_value : str
 
 class ColumnResponse(CreateColumn):
     id : UUID
+    column_field : str
+    default_value : str
+
+    model_config = ConfigDict(from_attributes=True)
 
 class EditColumn(BaseModel):
     stage_id : UUID | None = None

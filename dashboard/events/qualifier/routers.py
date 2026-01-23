@@ -56,6 +56,7 @@ async def retrieve_qualifiers_by_event(
     stmt = (
         select(
             User.id.label("user_id"),
+            User.email,
             User.username,
             Stage.name.label("round_name"),
         )
@@ -66,4 +67,21 @@ async def retrieve_qualifiers_by_event(
     )
 
     result = await db.execute(stmt)
-    return result.mappings().all()
+    info = result.mappings().all()
+
+    # Group the results by round_name
+    grouped = {}
+    for row in info:
+        round_name = row["round_name"]
+        user_data = {
+            "user_id": row["user_id"],
+            "username": row["username"],
+            "email" : row["email"]
+        }
+
+        if round_name not in grouped:
+            grouped[round_name] = {"round_name": round_name, "qualifier": []}
+        
+        grouped[round_name]["qualifier"].append(user_data)
+
+    return list(grouped.values())

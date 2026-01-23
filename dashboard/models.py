@@ -76,6 +76,11 @@ class User(Mixins, Base):
         back_populates="users",
         lazy="selectin",
     )
+    # standingcolumns : Mapped[list["StandingColumn"]] = relationship(
+    #     back_populates="users",
+    #     lazy="selectin",
+    #     cascade="all, delete-orphan",
+    # )
 
     group_membership: Mapped["GroupMembers"] = relationship(
         back_populates="user",
@@ -143,7 +148,6 @@ class Stage(Mixins, Base):
         back_populates="stages",
         lazy="selectin",
     )
-
 
     groups: Mapped[list["Group"]] = relationship(
         back_populates="stage",
@@ -229,6 +233,11 @@ class StandingColumn(Mixins, Base):
         ForeignKey("stages.id", ondelete="CASCADE"),
         nullable=False
     )
+
+    # event_id: Mapped[uuid.UUID] = mapped_column(
+    #     ForeignKey("events.id", ondelete="CASCADE"), nullable=False
+    # )
+
     column_field : Mapped[str] = mapped_column(String(255), nullable=False)
 
     stage: Mapped["Stage"] = relationship(back_populates="columns", lazy="selectin")
@@ -240,7 +249,9 @@ class StandingColumn(Mixins, Base):
     )
 
     default_value : Mapped[str] = mapped_column(String(60), nullable=True)
-    
+
+    # event: Mapped["Event"] = relationship(back_populates="standingcolumns")
+
     def __repr__(self):
         return f"<Standing Column id={self.id} filed={self.column_field}>"
     

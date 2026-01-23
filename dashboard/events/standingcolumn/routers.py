@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from models import StandingColumn, ColumnValues
+from models import StandingColumn, ColumnValues, Qualifier
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
 from typing import Annotated
 from sqlalchemy import select, delete
 from uuid import UUID
@@ -10,19 +11,49 @@ from events.standingcolumn.schema import CreateColumn, EditColumn, CreateValues,
 router = APIRouter()
 
 @router.post("")
-async def create_column(columnDetail : CreateColumn, db : Annotated[AsyncSession,Depends(get_db_session)]):
-    new_column = StandingColumn(
-        stage_id = columnDetail.stage_id,
-        column_field = columnDetail.column_field
-    )
+async def create_column(
+    columnDetail: CreateColumn, 
+    db: Annotated[AsyncSession, Depends(get_db_session)]
+):
+    try:
+        new_column = StandingColumn(
+            stage_id=columnDetail.stage_id,
+            column_field=columnDetail.column_field,
+            default_value=columnDetail.default_value
+        )
 
-    db.add(new_column)
-    await db.commit()
+        db.add(new_column)
+        await db.flush()
 
-    return{
-        "message" : "Column Added successfully",
-        "id" : new_column.id
-    }
+        # Get all users for this stage
+        stmt = select(Qualifier.user_id).where(Qualifier.stage_id == columnDetail.stage_id)
+        result = await db.execute(stmt)
+        users = result.scalars().all()
+
+        # Create default column values for each user
+        if users:
+            user_standing_col = [
+                ColumnValues(
+                    user_id=user_id,
+                    column_id=new_column.id,
+                    value=columnDetail.default_value
+                )
+                for user_id in users
+            ]
+            db.add_all(user_standing_col)
+
+        await db.commit()
+
+        return {
+            "message": "Column Added successfully",
+            "id": new_column.id
+        }
+    except SQLAlchemyError as e:
+        await db.rollback()
+        return {
+            "message": "Failed to create Column",
+            "error": str(e)
+        }
 
 @router.patch("/{column_id}")
 async def edit_column(column_id : UUID,columnDetail : EditColumn, db : Annotated[AsyncSession,Depends(get_db_session)]):
@@ -49,15 +80,15 @@ async def edit_column(column_id : UUID,columnDetail : EditColumn, db : Annotated
     }
 
 @router.get("")
-async def retrieve_column(db : Annotated[AsyncSession,Depends(get_db_session)]):
-    result = await db.execute(select(StandingColumn))
+async def retrieve_column(db : Annotated[AsyncSession,Depends(get_db_session)],stage_id : UUID):
+    result = await db.execute(select(StandingColumn).where(StandingColumn.stage_id == stage_id))
     stages = result.scalars().all()
-    if not stages:
-        raise HTTPException(
-            detail="Stage not found",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    return [ColumnResponse(**stage.__dict__) for stage in stages]
+    # if not stages:
+    #     raise HTTPException(
+    #         detail="Stage not found",
+    #         status_code=status.HTTP_404_NOT_FOUND
+    #     )
+    return [ColumnResponse.from_orm(stage) for stage in stages]
 
 @router.delete("/{column_id}")
 async def delete_column(column_id : UUID,db : Annotated[AsyncSession,Depends(get_db_session)]):

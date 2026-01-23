@@ -197,7 +197,6 @@ async def retrieve_user_not_in_qualifier(stage_id : UUID,event_id : UUID,db: Ann
     p = user_event_association
     u = User
     q = Qualifier
-    
     stmt = (select(u.id,u.username)
             .join(p,p.c.user_id == u.id)
             .outerjoin(
@@ -222,7 +221,7 @@ async def retrieve_user_not_in_qualifier(stage_id : UUID,event_id : UUID,db: Ann
 
 
 @router.get("/not-in-group")
-async def participants_not_in_group(event_id: UUID, db: Annotated[AsyncSession,Depends(get_db_session)], group_id : UUID | None = None):
+async def participants_not_in_group(event_id: UUID,stage_id : UUID, db: Annotated[AsyncSession,Depends(get_db_session)], group_id : UUID | None = None):
     if group_id:
         result = await db.execute(
             select(GroupMembers.user_id, User.username)
@@ -244,7 +243,12 @@ async def participants_not_in_group(event_id: UUID, db: Annotated[AsyncSession,D
         select(GroupMembers.user_id)
         .join(Group)
         .join(Stage)
-        .where(Stage.event_id == event_id)
+        .where(
+            and_(
+                Stage.event_id == event_id,
+                Stage.id == stage_id
+            )
+        )
     )
 
 
