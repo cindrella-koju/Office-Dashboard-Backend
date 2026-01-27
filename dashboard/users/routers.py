@@ -89,55 +89,55 @@ async def edit_user(
     edit_detail : EditUserDetail,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID | None = None,
-    current_user: dict = Depends(get_current_user),
+    # current_user: dict = Depends(get_current_user),
 ):
     if not user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id required")
-    if current_user["role"] == RoleEnum.superadmin:
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalars().first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        if edit_detail.username:
-            users = await get_all_users(db=db)
-            for db_user in users:
-                if db_user.username == user.username:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Username already exist"
-                    )
-            user.username = edit_detail.username
+    # if current_user["role"] == RoleEnum.superadmin:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    if edit_detail.username:
+        users = await get_all_users(db=db)
+        for db_user in users:
+            if db_user.username == user.username:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Username already exist"
+                )
+        user.username = edit_detail.username
 
-        if edit_detail.fullname:
-            user.fullname = edit_detail.fullname
+    if edit_detail.fullname:
+        user.fullname = edit_detail.fullname
 
-        if edit_detail.email:
-            users = await get_all_users(db=db)
-            for db_user in users:
-                if db_user.email == user.email:
-                    raise HTTPException(
-                        status_code = status.HTTP_409_CONFLICT,
-                        detail = "Email already exists"
-                    )
-            user.email = edit_detail.email
+    if edit_detail.email:
+        users = await get_all_users(db=db)
+        for db_user in users:
+            if db_user.email == user.email:
+                raise HTTPException(
+                    status_code = status.HTTP_409_CONFLICT,
+                    detail = "Email already exists"
+                )
+        user.email = edit_detail.email
 
 
-        if edit_detail.role:
-            user.role = edit_detail.role
+    if edit_detail.role:
+        user.role = edit_detail.role
 
-        await db.commit()
+    await db.commit()
 
-        return {
-            "message" : "User updated successfully",
-            "user_id" : user.id
-        }
-    raise HTTPException(
-        detail="Not Authorized",
-        status_code=status.HTTP_403_FORBIDDEN
-    )
+    return {
+        "message" : "User updated successfully",
+        "user_id" : user.id
+    }
+    # raise HTTPException(
+    #     detail="Not Authorized",
+    #     status_code=status.HTTP_403_FORBIDDEN
+    # )
 
 @router.delete("/user")
 async def delete_user(    
