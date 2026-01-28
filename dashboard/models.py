@@ -123,6 +123,12 @@ class Event(Mixins, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    groups: Mapped[list["Group"]] = relationship(
+        "Group",
+        back_populates="event",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     qualifiers: Mapped[list["Qualifier"]] = relationship(
         back_populates="event",
         cascade="all, delete-orphan",
@@ -182,6 +188,16 @@ class Group(Mixins, Base):
         nullable=False,
     )
 
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    event: Mapped["Event"] = relationship(
+        "Event",
+        back_populates="groups",
+        lazy="selectin",
+    )
     name: Mapped[str] = mapped_column(String(50), nullable=False)
 
     stage: Mapped["Stage"] = relationship(back_populates="groups", lazy="selectin")
@@ -206,7 +222,7 @@ class GroupMembers(Mixins, Base):
     __tablename__ = "groupmembers"
 
     __table_args__ = (
-        UniqueConstraint("user_id", name="uq_groupmembers_user_id"),
+        UniqueConstraint("user_id", "group_id", name="uq_groupmembers_user_id_group_id"),
     )
 
     group_id: Mapped[uuid.UUID] = mapped_column(
@@ -250,6 +266,8 @@ class StandingColumn(Mixins, Base):
 
     default_value : Mapped[str] = mapped_column(String(60), nullable=True)
 
+    to_show : Mapped[bool] = mapped_column(Boolean,default=False)
+
     # event: Mapped["Event"] = relationship(back_populates="standingcolumns")
 
     def __repr__(self):
@@ -270,7 +288,6 @@ class ColumnValues(Mixins,Base):
 
     value : Mapped[str] = mapped_column(String(60),nullable=False)
     
-
     __table_args__ = (
         PrimaryKeyConstraint(
             "user_id",
