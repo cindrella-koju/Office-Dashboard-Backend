@@ -153,12 +153,12 @@ async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],ev
     
     query = (
         select(
-            # User.username.label("username"),
+            User.username.label("username"),
             GroupMembers.user_id,
             Stage.id.label("stage_id"),
             Stage.name.label("stage_name"),
-            # Group.id.label("group_id"),
-            # Group.name.label("group_name"),
+            Group.id.label("group_id"),
+            Group.name.label("group_name"),
             # StandingColumn.column_field.label("column_name"),
             # StandingColumn.id.label("column_id"),
             # ColumnValues.value.label("column_value")
@@ -167,7 +167,7 @@ async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],ev
         .join(Stage, Stage.id == Group.stage_id)
         # .join(StandingColumn,StandingColumn.stage_id == Stage.id)
         # .join(ColumnValues, ColumnValues.column_id == StandingColumn.id)
-        # .join(User,User.id == GroupMembers.user_id)
+        .join(User,User.id == GroupMembers.user_id)
         .where(
             and_(
                 Group.event_id == event_id,
@@ -195,12 +195,12 @@ async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],ev
 
     # return list(group_dict.values())
     return [{
-        # "username":s.username,
+        "username":s.username,
         "user_id" : s.user_id,
         "stage_name" : s.stage_name,
         "stage_id" : s.stage_id,
-        # "group_id" : s.group_id,
-        # "group_name" : s.group_name,
+        "group_id" : s.group_id,
+        "group_name" : s.group_name,
         # "column_name" : s.column_name,
         # "column_id" : s.column_id,
         # "column_value" : s.column_value
