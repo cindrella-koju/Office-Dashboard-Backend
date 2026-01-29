@@ -159,14 +159,14 @@ async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],ev
             Stage.name.label("stage_name"),
             Group.id.label("group_id"),
             Group.name.label("group_name"),
-            # StandingColumn.column_field.label("column_name"),
-            # StandingColumn.id.label("column_id"),
-            # ColumnValues.value.label("column_value")
+            StandingColumn.column_field.label("column_name"),
+            StandingColumn.id.label("column_id"),
+            ColumnValues.value.label("column_value")
         )
         .join(Group, Group.id == GroupMembers.group_id)
         .join(Stage, Stage.id == Group.stage_id)
-        # .join(StandingColumn,StandingColumn.stage_id == Stage.id)
-        # .join(ColumnValues, ColumnValues.column_id == StandingColumn.id)
+        .join(StandingColumn,StandingColumn.stage_id == Stage.id)
+        .join(ColumnValues, and_(ColumnValues.column_id == StandingColumn.id, ColumnValues.user_id == GroupMembers.user_id))
         .join(User,User.id == GroupMembers.user_id)
         .where(
             and_(
@@ -178,36 +178,58 @@ async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],ev
     result = await db.execute(query)
     rows = result.mappings().all()
 
-    # group_dict = {}
-    # for row in rows:
-    #     sid = row.stage_id
-    #     if sid not in group_dict:
-    #         group_dict[sid] = {
-    #             "stage_id": row.stage_id,
-    #             "stage_name" : row.stage_name,
-    #             "groups" : {}
-    #         }
+    group_dict = {}
+    for row in rows:
+        sid = row.stage_id
+        gid = row.group_id
+        uid = row.user_id
+        if sid not in group_dict:
+            group_dict[sid] = {
+                "stage_id": row.stage_id,
+                "stage_name" : row.stage_name,
+                "groups" : {}
+            }
+        if gid not in group_dict[sid]["groups"]:
+            group_dict[sid]["groups"][gid] = {
+                "group_id": row.group_id,
+                "group_name": row.group_name,
+                "members": {}
+            }
 
-    # for gdata in group_dict.values():
-    #     gdata["groups"] = list(gdata["groups"].values())
-    #     for group in gdata["groups"]:
-    #         group["members"] = list(group["members"].values())
+            # print("User Id:",uid)
+        if uid not in group_dict[sid]["groups"][gid]["members"]:
+            group_dict[sid]["groups"][gid]["members"][uid] = {
+                "user_id": row.user_id,
+                "username": row.username,
+                "columns": []
+            }
 
-    # return list(group_dict.values())
-    return [{
-        "username":s.username,
-        "user_id" : s.user_id,
-        "stage_name" : s.stage_name,
-        "stage_id" : s.stage_id,
-        "group_id" : s.group_id,
-        "group_name" : s.group_name,
-        # "column_name" : s.column_name,
-        # "column_id" : s.column_id,
-        # "column_value" : s.column_value
-    }
+        group_dict[sid]["groups"][gid]["members"][uid]["columns"].append({
+            "column_id": row.column_id,
+            "column_field": row.column_name,
+            "value": row.column_value
+        })
 
-        for s in rows
-    ]
+    for gdata in group_dict.values():
+        gdata["groups"] = list(gdata["groups"].values())
+        for group in gdata["groups"]:
+            group["members"] = list(group["members"].values())
+
+    return list(group_dict.values())
+    # return [{
+    #     "username":s.username,
+    #     "user_id" : s.user_id,
+    #     "stage_name" : s.stage_name,
+    #     "stage_id" : s.stage_id,
+    #     "group_id" : s.group_id,
+    #     "group_name" : s.group_name,
+    #     "column_name" : s.column_name,
+    #     "column_id" : s.column_id,
+    #     "column_value" : s.column_value
+    # }
+
+    #     for s in rows
+    # ]
 
 @router.patch("/{group_id}")
 async def update_group(

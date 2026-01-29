@@ -6,7 +6,7 @@ from sqlalchemy import select, delete
 from uuid import UUID
 from db_connect import get_db_session
 from sqlalchemy.exc import SQLAlchemyError
-from events.tiesheet.schema import CreateTiesheet, CreateTiesheetPlayers, EditTiesheetPlayers
+from events.tiesheet.schema import CreateTiesheet, CreateTiesheetPlayers, EditTiesheetPlayers, TiesheetStatus
 
 router = APIRouter()
 
@@ -20,6 +20,7 @@ async def create_tiesheet(
             group_id=tiesheet_detail.group_id,
             stage_id=tiesheet_detail.stage_id,
             scheduled_date=tiesheet_detail.scheduled_date,
+            status = TiesheetStatus(tiesheet_detail.status),
             scheduled_time=tiesheet_detail.scheduled_time
         )
 
@@ -97,6 +98,7 @@ async def retrieve_tiesheet(
             t.id,
             t.scheduled_date,
             t.scheduled_time,
+            t.status,
             s.name.label("stage_name"),
             g.name.label("group_name"),
             tp.user_id,
@@ -127,6 +129,7 @@ async def retrieve_tiesheet(
                 "scheduled_date": row["scheduled_date"],
                 "scheduled_time": str(row["scheduled_time"]),
                 "stage_name": row["stage_name"],
+                "status" : row["status"],
                 "player_info": []
             }
             # Only include group_name if it exists

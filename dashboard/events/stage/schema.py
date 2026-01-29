@@ -18,7 +18,6 @@ class CreateStateForm(BaseModel):
 class StageResponse(StageDetail):
     id : uuid.UUID
 
-
 class RoundInfo(BaseModel):
     id : uuid.UUID
     name :  str

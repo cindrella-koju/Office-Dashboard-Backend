@@ -93,19 +93,17 @@ async def retrieve_event(
     if event_id:
         event = await extract_one_event(db=db, event_id=event_id)
         if not event:
-            raise HTTPException(
-                detail="Event not found",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-        return EventDetailResponse(**event.__dict__)
+            return{
+                "detail":"Event not found",
+            }
+        return EventDetailResponse.model_validate(event)
     else:
         events = await extract_all_event(db=db)
         if not events:
-            raise HTTPException(
-                detail="Event not found",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-        return [EventDetailResponse(**event.__dict__) for event in events]
+            return{
+                "detail":"Event not found",
+            }
+        return [EventDetailResponse.model_validate(event) for event in events]
     
 @router.patch("")
 async def edit_user(

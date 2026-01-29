@@ -32,21 +32,58 @@ async def retrieve_qualifier_by_round(stage_id : UUID,  db: Annotated[AsyncSessi
     ]
 
 @router.post("")
-async def create_qualifier(event_id : UUID,stage_id:UUID,db: Annotated[AsyncSession, Depends(get_db_session)], qualifier : QualifierModel):
-    new_qualifier = [Qualifier(
-            event_id = event_id,
-            user_id = q,
-            stage_id = stage_id
+async def create_qualifier(
+    event_id: UUID,
+    stage_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    qualifier: QualifierModel
+):
+    try:
+        # 1. Create new Qualifiers for each user
+        new_qualifiers = [
+            Qualifier(
+                event_id=event_id,
+                user_id=user_id,
+                stage_id=stage_id
+            )
+            for user_id in qualifier.user_id
+        ]
+
+        db.add_all(new_qualifiers)
+        await db.commit()
+
+        # 2. Fetch the columns and their default values for the given stage
+        result = await db.execute(
+            select(
+                StandingColumn.id,
+                StandingColumn.default_value
+            ).where(StandingColumn.stage_id == stage_id)
         )
-        for q in qualifier.user_id
-    ]
+        cols_and_vals = result.all()
 
-    db.add_all(new_qualifier)
-    await db.commit()
+        # 3. Create ColumnValues for each user & column
+        new_column_values = [
+            ColumnValues(
+                user_id=user_id,
+                column_id=col_id,
+                value=default_value
+            )
+            for user_id in qualifier.user_id
+            for col_id, default_value in cols_and_vals
+        ]
 
-    return{
-        "message" : "Qualifier created Succeddfully"
-    }
+        db.add_all(new_column_values)
+        await db.commit()
+
+        return {"message": "Qualifier created successfully"}
+
+    except Exception as e:
+        # Rollback in case of any error
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred: {str(e)}"
+        )
 
 @router.get("/event")
 async def retrieve_qualifiers_by_event(

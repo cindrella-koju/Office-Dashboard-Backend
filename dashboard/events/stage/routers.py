@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from events.stage.schema import RoundInfo, StageDetail, EditStageDetail, StageResponse
-from models import Stage, user_event_association, User, GroupMembers
+from models import Stage, user_event_association, User, GroupMembers, StandingColumn, Group
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 from sqlalchemy import select, delete
@@ -18,6 +18,25 @@ async def create_stage(event_id : UUID,stage : StageDetail,  db : Annotated[Asyn
     )
 
     db.add(new_state)
+    await db.flush()
+    default_standing_col = [
+        {"column_field": "Match Played", "default_value": "0"},
+        {"column_field": "Win", "default_value": "0"},
+        {"column_field": "Loss", "default_value": "0"},
+        {"column_field": "Draw", "default_value": "0"},
+        {"column_field": "Points", "default_value": "0"},
+    ]
+
+    new_standing_columns = [
+        StandingColumn(
+            stage_id=new_state.id,
+            column_field=col["column_field"],
+            default_value=col["default_value"]
+        )
+        for col in default_standing_col
+    ]
+    
+    db.add_all(new_standing_columns)
     await db.commit()
     return{
         "message" : "Stage added successfully",
@@ -99,8 +118,6 @@ async def delete_stage(
     }
 
 
-
-
 @router.get("/rounds")
 async def rounds(db: Annotated[AsyncSession,Depends(get_db_session)], event_id : UUID): 
     stmt = select(Stage).where(Stage.event_id == event_id)
@@ -110,4 +127,3 @@ async def rounds(db: Annotated[AsyncSession,Depends(get_db_session)], event_id :
     stageinfo = [RoundInfo.from_orm(stage) for stage in stages]
 
     return stageinfo
-

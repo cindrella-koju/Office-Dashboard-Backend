@@ -19,7 +19,8 @@ async def create_column(
         new_column = StandingColumn(
             stage_id=columnDetail.stage_id,
             column_field=columnDetail.column_field,
-            default_value=columnDetail.default_value
+            default_value=columnDetail.default_value,
+            to_show = bool(columnDetail.to_show)
         )
 
         db.add(new_column)
@@ -72,10 +73,14 @@ async def edit_column(column_id : UUID,columnDetail : EditColumn, db : Annotated
     if columnDetail.column_field:
         column.column_field = columnDetail.column_field
 
+    if columnDetail.to_show:
+        column.to_show = columnDetail.to_show == "True"
+
+
     await db.commit()
 
     return {
-        "message" : "Stage Aded Successfully",
+        "message" : "Stage Update Successfully",
         "stage_id" : column_id
     }
 
