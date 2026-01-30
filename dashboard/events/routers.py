@@ -15,6 +15,7 @@ from events.standingcolumn.routers import router as column_router
 from events.tiesheet.routers import router as tiesheet_router
 from events.qualifier.routers import router as qualifier_router
 from events.overalltiesheet.routers import router as overalltiesheet_router
+from events.match.routers import router as match_router
 from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
@@ -24,6 +25,7 @@ router.include_router(column_router,prefix="/column",tags=["Column"])
 router.include_router(tiesheet_router, prefix="/tiesheet",tags=["Tiesheet"])
 router.include_router(qualifier_router, prefix="/qualifier",tags=["Qualifier"])
 router.include_router(overalltiesheet_router,prefix="/overalltiesheet",tags=["Overalltiesheet"])
+router.include_router(match_router,prefix="/match", tags=["Match"])
 
 @router.post("")
 async def create_event( 

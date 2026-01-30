@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from typing import List
 from datetime import date, time
@@ -26,3 +26,32 @@ class CreateTiesheet(BaseModel):
     scheduled_time: time
     status: TiesheetStatus
     players: List[UUID]
+
+
+class ColumnValueInput(BaseModel):
+    column_id: UUID
+    value: str
+
+
+class PlayerColumnData(BaseModel):
+    user_id: UUID
+    is_winner: bool
+    columns: List[ColumnValueInput]
+
+
+class UpdateTiesheet(BaseModel):
+    stage_id: UUID
+    players: List[UUID]
+    scheduled_date: date 
+    scheduled_time: time 
+    status: TiesheetStatus
+    player_columns: List[PlayerColumnData] | None = None
+
+class StandingColumnResponse(BaseModel):
+    column_field : str
+    value : str | None
+    stage_id : UUID
+    user_id : UUID
+    to_show : bool
+
+    model_config = ConfigDict(from_attributes=True)

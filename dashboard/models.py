@@ -336,12 +336,13 @@ class Tiesheet(Mixins, Base):
 
     group: Mapped["Group"] = relationship(back_populates="tiesheets", lazy="selectin")
     stage: Mapped["Stage"] = relationship(back_populates="tiesheets", lazy="selectin")
+    match : Mapped[list["Match"]] = relationship(back_populates="tiesheet", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Tiesheet id={self.id} scheduled_at={self.scheduled_at}>"
+        return f"<Tiesheet id={self.id} scheduled_at={self.scheduled_date}>"
 
 
-class TiesheetPlayer(Base):
+class TiesheetPlayer(Mixins,Base):
     __tablename__ = "tiesheet_players"
 
     tiesheet_id: Mapped[uuid.UUID] = mapped_column(
@@ -358,21 +359,48 @@ class TiesheetPlayer(Base):
 
     tiesheet: Mapped["Tiesheet"] = relationship(back_populates="players", lazy="selectin")
     user: Mapped["User"] = relationship(lazy="selectin")
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
+    matchscore : Mapped["Tiesheetplayermatchscore"] = relationship(back_populates="tiesheetplayer", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<TiesheetPlayer tiesheet_id={self.tiesheet_id} user_id={self.user_id} winner={self.is_winner}>"
+
+class Match(Mixins, Base):
+    __tablename__ = "roundmatch"
+
+    tiesheet_id : Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tiesheets.id", ondelete="CASCADE")
+    )
+
+    match_name : Mapped[String] = mapped_column(String(50),nullable=False)
+
+    tiesheet: Mapped["Tiesheet"] = relationship(back_populates="match")
+    matchscore : Mapped["Tiesheetplayermatchscore"] = relationship(back_populates="match", cascade="all, delete-orphan")
     
+    def __repr__(self):
+        return f"<Match match_id={self.id} match_name={self.match_name}>"
+    
+class Tiesheetplayermatchscore(Mixins, Base):
+    __tablename__ = "tiesheet_player_match_score"
+
+    match_id : Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("roundmatch.id", ondelete="CASCADE"),
+    )
+
+    tiesheetplayer_id : Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tiesheet_players.id", ondelete="CASCADE")
+    )
+
+    points : Mapped[String] = mapped_column(String(50), default="0")
+    match : Mapped["Match"] = relationship(back_populates="matchscore")
+    tiesheetplayer : Mapped["TiesheetPlayer"] = relationship(back_populates="matchscore")
+
+    __table_args__ = (
+        UniqueConstraint('match_id', 'tiesheetplayer_id', name='uq_match_tiesheetplayer'),
+    )
+
+    def __repr__(self):
+        return f"<Tiesheet Player Match Score id={self.id}>"
+
 class Qualifier(Mixins, Base):
     __tablename__ = "qualifier"
 
