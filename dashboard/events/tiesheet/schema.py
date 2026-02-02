@@ -8,6 +8,7 @@ from enum import Enum
 class TiesheetStatus(str, Enum):
     scheduled = "scheduled"
     completed = "completed"
+    ongoing = "ongoing"
 
 
 class CreateTiesheetPlayers(BaseModel):

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from events.tiesheet.schema import StandingColumnResponse, UpdateTiesheet, TiesheetStatus
+import datetime
 
 async def extract_standing_column_and_value_of_user(user_id : UUID, stage_id:UUID, db: AsyncSession):
     stmt = (
@@ -21,7 +22,7 @@ async def extract_standing_column_and_value_of_user(user_id : UUID, stage_id:UUI
 
     return [StandingColumnResponse(**cv) for cv in column_and_column_val]
 
-async def get_tiesheet_with_player(event_id : UUID, db : AsyncSession, stage_id : UUID | None = None):
+async def get_tiesheet_with_player(event_id : UUID, db : AsyncSession, stage_id : UUID | None = None, today :bool | None = None):
     stmt = (
         select(
             Tiesheet.id,
@@ -46,12 +47,45 @@ async def get_tiesheet_with_player(event_id : UUID, db : AsyncSession, stage_id 
     if stage_id:
         stmt = stmt.where(Tiesheet.stage_id == stage_id)
 
+    if today:
+        today_date = datetime.date.today()
+        stmt = stmt.where(Tiesheet.scheduled_date == today_date)
+
+
     result = await db.execute(stmt)
     rows = result.mappings().all()
 
     return rows
 
-async def get_tiesheet_by_id(db:AsyncSession, tiesheet_id : UUID):
+async def get_tiesheet_by_id(db:AsyncSession, tiesheet_id : UUID, round_id : UUID | None = None):
+    if round_id:
+        stmt = (
+        select(
+            Tiesheet.id,
+            Tiesheet.scheduled_date,
+            Tiesheet.scheduled_time,
+            Tiesheet.status,
+            Stage.name.label("stage_name"),
+            Stage.id.label("stage_id"),
+            Group.name.label("group_name"),
+            TiesheetPlayer.user_id,
+            TiesheetPlayer.is_winner,
+            User.username,
+        )
+        .join(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
+        .join(Stage, Stage.id == Tiesheet.stage_id)
+        .join(Event, Event.id == Stage.event_id)
+        .join(User, User.id == TiesheetPlayer.user_id)
+        .outerjoin(Group, Group.id == Tiesheet.group_id)
+        .where(
+            and_
+                (
+                   Tiesheet.id == tiesheet_id,
+                   Stage.id == round_id
+                )
+        )
+    )
+        
     stmt = (
         select(
             Tiesheet.id,
@@ -73,47 +107,46 @@ async def get_tiesheet_by_id(db:AsyncSession, tiesheet_id : UUID):
         .where(Tiesheet.id == tiesheet_id)
     )
 
-
     result = await db.execute(stmt)
     rows = result.mappings().all()
 
     return rows
 
-# async def test_api(db :AsyncSession, t_id : UUID):
-#     stmt = (
-#         select(
-#             Tiesheet.id,
-#             Tiesheet.scheduled_date,
-#             Tiesheet.scheduled_time,
-#             Tiesheet.status,
-#             Stage.name.label("stage_name"),
-#             Stage.id.label("stage_id"),
-#             Group.name.label("group_name"),
-#             func.json_agg(
-#                 func.json_build_object(
-#                     "user_id", TiesheetPlayer.user_id,
-#                     "is_winner", TiesheetPlayer.is_winner,
-#                     "username",User.username
-#                 )
-#             ).label("userinfo")
-#         )
-#         .join(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
-#         .join(Stage, Stage.id == Tiesheet.stage_id)
-#         .join(Event, Event.id == Stage.event_id)
-#         .join(User, User.id == TiesheetPlayer.user_id)
-#         .outerjoin(Group, Group.id == Tiesheet.group_id)
-#         .where(Tiesheet.id == t_id )
-#         .group_by(
-#             Tiesheet.id,
-#             Stage.id,
-#             Stage.name,
-#             Group.name
-#         )
-#     )
-#     result = await db.execute(stmt)
-#     rows = result.mappings().all()
+async def test_api(db :AsyncSession, t_id : UUID):
+    stmt = (
+        select(
+            Tiesheet.id,
+            Tiesheet.scheduled_date,
+            Tiesheet.scheduled_time,
+            Tiesheet.status,
+            Stage.name.label("stage_name"),
+            Stage.id.label("stage_id"),
+            Group.name.label("group_name"),
+            func.json_agg(
+                func.json_build_object(
+                    "user_id", TiesheetPlayer.user_id,
+                    "is_winner", TiesheetPlayer.is_winner,
+                    "username",User.username
+                )
+            ).label("userinfo")
+        )
+        .join(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
+        .join(Stage, Stage.id == Tiesheet.stage_id)
+        .join(Event, Event.id == Stage.event_id)
+        .join(User, User.id == TiesheetPlayer.user_id)
+        .outerjoin(Group, Group.id == Tiesheet.group_id)
+        .where(Tiesheet.id == t_id )
+        .group_by(
+            Tiesheet.id,
+            Stage.id,
+            Stage.name,
+            Group.name
+        )
+    )
+    result = await db.execute(stmt)
+    rows = result.mappings().all()
 
-#     return rows
+    return rows
 
 async def get_tiesheet(db: AsyncSession, tiesheet_id: UUID) -> Tiesheet | None:
     stmt = select(Tiesheet).where(Tiesheet.id == tiesheet_id)

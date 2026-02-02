@@ -90,22 +90,23 @@ async def create_event(
 @router.get("")
 async def retrieve_event(
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    event_id: UUID | None = None,
+    # event_id: UUID | None = None,
+    status : str | None = None
 ):
-    if event_id:
-        event = await extract_one_event(db=db, event_id=event_id)
-        if not event:
-            return{
-                "detail":"Event not found",
-            }
-        return EventDetailResponse.model_validate(event)
-    else:
-        events = await extract_all_event(db=db)
-        if not events:
-            return{
-                "detail":"Event not found",
-            }
-        return [EventDetailResponse.model_validate(event) for event in events]
+    # if status:
+    #     event = await extract_one_event(db=db, )
+    #     if not event:
+    #         return{
+    #             "detail":"Event not found",
+    #         }
+    #     return EventDetailResponse.model_validate(event)
+    # else:
+    events = await extract_all_event(db=db, status=status)
+    if not events:
+        return{
+            "detail":"Event not found",
+        }
+    return [EventDetailResponse.model_validate(event) for event in events]
     
 @router.patch("")
 async def edit_user(

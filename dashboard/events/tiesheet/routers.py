@@ -86,12 +86,13 @@ async def retrieve_tiesheet(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     event_id: UUID,
     stage_id: UUID | None = None,
+    today : bool | None = None
 ):
     
-    rows = await get_tiesheet_with_player(event_id=event_id, db=db)
+    rows = await get_tiesheet_with_player(event_id=event_id, db=db, today=today)
 
     if stage_id:
-        rows = await get_tiesheet_with_player(event_id=event_id, stage_id=stage_id, db=db)
+        rows = await get_tiesheet_with_player(event_id=event_id, stage_id=stage_id, db=db, today=today)
 
     tiesheets: dict[UUID, dict] = {}
 
@@ -147,10 +148,12 @@ async def retrieve_tiesheet(
 @router.get("/{tiesheet_id}")
 async def get_tiesheet(
     tiesheet_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db_session)]
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    round_id : UUID | None = None
 ):
     """Get a specific tiesheet by ID with all player info and column values"""
-    
+    if round_id:
+        rows = await get_tiesheet_by_id(db=db, tiesheet_id=tiesheet_id, round_id=round_id)
     # Get tiesheet with players
     rows = await get_tiesheet_by_id(db=db, tiesheet_id=tiesheet_id)
     
@@ -175,7 +178,8 @@ async def get_tiesheet(
         .join(StandingColumn, StandingColumn.id == ColumnValues.column_id)
         .where(
             ColumnValues.user_id.in_(user_ids),
-            StandingColumn.stage_id == stage_id
+            StandingColumn.stage_id == stage_id,
+
         )
     )
     

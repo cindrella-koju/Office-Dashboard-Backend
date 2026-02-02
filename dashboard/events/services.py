@@ -3,8 +3,12 @@ from models import Event
 from uuid import UUID
 from sqlalchemy import select
 
-async def extract_all_event(db: AsyncSession):
-    result = await db.execute(select(Event))
+async def extract_all_event(db: AsyncSession, status: str | None = None):
+    if status is None or status.lower() == "all":
+        result = await db.execute(select(Event))
+    else:
+        result = await db.execute(select(Event).where(Event.status == status.lower()))
+
     events = result.scalars().all()
     return events
 

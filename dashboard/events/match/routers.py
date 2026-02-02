@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
-from models import Match, Tiesheetplayermatchscore, TiesheetPlayer, User
+from models import Match, Tiesheetplayermatchscore, TiesheetPlayer, User, Tiesheet
 from pydantic import BaseModel
 from uuid import UUID
 from sqlalchemy import select, func
+from sqlalchemy.exc import SQLAlchemyError
 
 router = APIRouter()
 
@@ -18,19 +19,40 @@ class CreateTiesheetPlayerMatchScore(BaseModel):
     points : str
 
 @router.post("")
-async def create_match(db: Annotated[AsyncSession,Depends(get_db_session)], match_detail : CreateMatch):
-    stmt = Match(
-        tiesheet_id = match_detail.tiesheet_id,
-        match_name  = match_detail.match_name
-    )
+async def create_match(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    match_detail: CreateMatch
+):
+    try:
+        new_match = Match(
+            tiesheet_id=match_detail.tiesheet_id,
+            match_name=match_detail.match_name
+        )
+        db.add(new_match)
+        await db.commit()
+        await db.refresh(new_match)
 
-    db.add(stmt)
-    await db.commit()
+        result = await db.execute(select(Tiesheet).where(Tiesheet.id == match_detail.tiesheet_id))
+        tiesheet = result.scalars().first()
+        if tiesheet:
+            tiesheet.status = "ongoing"
+            await db.commit()
+        else:
+            await db.delete(new_match)
+            await db.commit()
+            raise HTTPException(status_code=404, detail="Tiesheet not found")
 
-    return {
-        "message" : "Match added successfully",
-        "id" : stmt.id
-    }
+        return {
+            "message": "Match added successfully",
+            "id": new_match.id
+        }
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @router.post("{match_id}/score")
 async def create_score_of_player(db: Annotated[AsyncSession,Depends(get_db_session)], match_id : UUID, playerscore_detail:CreateTiesheetPlayerMatchScore):

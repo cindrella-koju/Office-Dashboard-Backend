@@ -17,8 +17,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
 
 password_hash = PasswordHash.recommended()
 
-async def get_all_users(db : AsyncSession):
-    result = await db.execute(select(User))
+async def get_all_users(db : AsyncSession, role : str | None = None):
+    if role is None or role.lower() == "all":
+        result = await db.execute(select(User))
+    else:
+        result = await db.execute(select(User).where(User.role == role.lower()))
     users = result.scalars().all()
     return users
 
