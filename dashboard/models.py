@@ -390,7 +390,8 @@ class Tiesheetplayermatchscore(Mixins, Base):
         ForeignKey("tiesheet_players.id", ondelete="CASCADE")
     )
 
-    points : Mapped[String] = mapped_column(String(50), default="0")
+    points : Mapped[String] = mapped_column(String(50), nullable=True)
+    winner : Mapped[Boolean] = mapped_column(Boolean, default=False)
     match : Mapped["Match"] = relationship(back_populates="matchscore")
     tiesheetplayer : Mapped["TiesheetPlayer"] = relationship(back_populates="matchscore")
 
