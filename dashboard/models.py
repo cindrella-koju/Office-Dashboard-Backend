@@ -101,7 +101,11 @@ class User(Mixins, Base):
     def __repr__(self):
         return f"<User id={self.id} username={self.username}>"
 
+class Role(Mixins, Base):
+    __tablename__ = "role"
 
+    rolename : Mapped[str] = mapped_column(String(30), nullable=False)
+ 
 class Event(Mixins, Base):
     __tablename__ = "events"
 
@@ -302,7 +306,6 @@ class ColumnValues(Mixins,Base):
         return f"<Column Value value={self.value}>"
 
 
-# Need to add state ie: completed, upcoming... 
 class Tiesheet(Mixins, Base):
     __tablename__ = "tiesheets"
 

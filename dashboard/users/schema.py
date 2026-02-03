@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from enum import Enum
 from datetime import datetime
 from uuid import UUID
@@ -30,8 +30,7 @@ class UserDetailResponse(BaseModel):
     created_at : datetime
     updated_at : datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class LoginUser(BaseModel):
     username : str

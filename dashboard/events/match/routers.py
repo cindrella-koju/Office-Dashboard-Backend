@@ -1,18 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
-from typing import Annotated
+from typing import Annotated, List
 from models import Match, Tiesheetplayermatchscore, TiesheetPlayer, User, Tiesheet
 from pydantic import BaseModel
 from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
-
+from events.match.services import extract_tiesheet_player_id
 router = APIRouter()
+
+class UserInfo(BaseModel):
+    points : str | None
+    user_id : UUID
+    winner : bool
 
 class CreateMatch(BaseModel):
     tiesheet_id : UUID
     match_name : str
+    userDetail : List[UserInfo]
 
 class CreateTiesheetPlayerMatchScore(BaseModel):
     tiesheetplayer_id : UUID
@@ -21,53 +27,57 @@ class CreateTiesheetPlayerMatchScore(BaseModel):
 @router.post("")
 async def create_match(
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    match_detail: CreateMatch
+    match_detail: list[CreateMatch]
 ):
     try:
-        new_match = Match(
-            tiesheet_id=match_detail.tiesheet_id,
-            match_name=match_detail.match_name
-        )
-        db.add(new_match)
+        for md in match_detail:
+            match = Match(
+                tiesheet_id=md.tiesheet_id,
+                match_name=md.match_name
+            )
+            db.add(match)
+            await db.flush()
+
+            for ud in md.userDetail:
+                tiesheetplayer_id = await extract_tiesheet_player_id(
+                    db=db,
+                    user_id=ud.user_id,
+                    tiesheet_id=md.tiesheet_id
+                )
+
+                if tiesheetplayer_id is None:
+                    raise ValueError("Tiesheet player not found")
+
+                pms = Tiesheetplayermatchscore(
+                    match_id=match.id,
+                    tiesheetplayer_id=tiesheetplayer_id,
+                    points=ud.points,
+                    winner=ud.winner
+                )
+                db.add(pms)
+
         await db.commit()
-        await db.refresh(new_match)
-
-        result = await db.execute(select(Tiesheet).where(Tiesheet.id == match_detail.tiesheet_id))
-        tiesheet = result.scalars().first()
-        if tiesheet:
-            tiesheet.status = "ongoing"
-            await db.commit()
-        else:
-            await db.delete(new_match)
-            await db.commit()
-            raise HTTPException(status_code=404, detail="Tiesheet not found")
-
-        return {
-            "message": "Match added successfully",
-            "id": new_match.id
-        }
+        return {"message": "Match Detail added Successfully"}
 
     except SQLAlchemyError as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
-@router.post("{match_id}/score")
-async def create_score_of_player(db: Annotated[AsyncSession,Depends(get_db_session)], match_id : UUID, playerscore_detail:CreateTiesheetPlayerMatchScore):
-    stmt = Tiesheetplayermatchscore(
-        match_id = match_id,
-        tiesheetplayer_id = playerscore_detail.tiesheetplayer_id,
-        points = playerscore_detail.points
-    )
 
-    db.add(stmt)
-    await db.commit()
+# @router.post("{match_id}/score")
+# async def create_score_of_player(db: Annotated[AsyncSession,Depends(get_db_session)], match_id : UUID, playerscore_detail:CreateTiesheetPlayerMatchScore):
+#     stmt = Tiesheetplayermatchscore(
+#         match_id = match_id,
+#         tiesheetplayer_id = playerscore_detail.tiesheetplayer_id,
+#         points = playerscore_detail.points
+#     )
 
-    return {
-        "message" : "Match Score added Succesfully"
-    }
+#     db.add(stmt)
+#     await db.commit()
+
+#     return {
+#         "message" : "Match Score added Succesfully"
+#     }
 
 @router.get("/players")
 async def get_tiesheet_player(db: Annotated[AsyncSession,Depends(get_db_session)], tiesheet_id : UUID):
@@ -86,7 +96,8 @@ async def get_overall_score(db: Annotated[AsyncSession,Depends(get_db_session)],
                 func.json_build_object(
                     "username", User.username,
                     "user_id", TiesheetPlayer.user_id,
-                    "points", Tiesheetplayermatchscore.points
+                    "points", Tiesheetplayermatchscore.points,
+                    "winner", Tiesheetplayermatchscore.winner
                 )
             ).label("userinfo")
         )

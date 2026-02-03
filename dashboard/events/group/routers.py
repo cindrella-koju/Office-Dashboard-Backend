@@ -378,3 +378,45 @@ async def delete_group_member(
     return {
         "message" : f"Member {user_id} removed from group {group_id} successfully"
     }
+
+
+@router.get("/byround")
+async def extract_group_by_round(
+    round_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)]
+):
+    stmt = select(Group.id, Group.name).where(Group.stage_id == round_id)
+    result = await db.execute(stmt)
+    group_info = result.mappings().all()
+
+    return [
+        {
+            "id" : gi.id,
+            "name" : gi.name
+        }
+
+        for gi in group_info
+    ]
+
+@router.get("/member")
+async def extract_member_of_group(
+    group_id : UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)]
+):
+    stmt = (
+        select(GroupMembers.user_id, User.username)
+        .join(User, User.id == GroupMembers.user_id)
+        .where(GroupMembers.group_id == group_id)
+    )
+    result = await db.execute(stmt)
+
+    group_member = result.mappings().all()
+
+    return [
+        {
+            "id" : gm.user_id,
+            "username" : gm.username
+        }
+
+        for gm in group_member
+    ]

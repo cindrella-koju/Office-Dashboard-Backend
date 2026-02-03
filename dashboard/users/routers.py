@@ -75,11 +75,10 @@ async def retrieve_user(
     # else:
     users = await get_all_users(db=db, role=role)
     if not users:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No users found"
-        )
-    return [UserDetailResponse(**user.__dict__) for user in users]
+        return{
+            "message" : "User not found"
+        }
+    return [UserDetailResponse.model_validate(user) for user in users]
     # raise HTTPException(
     #     detail="No Access",
     #     status_code=status.HTTP_403_FORBIDDEN

@@ -206,6 +206,7 @@ async def get_tiesheet(
         "scheduled_time": str(first_row["scheduled_time"]),
         "status": first_row["status"],
         "stage_name": first_row["stage_name"],
+        "group_id" : first_row["group_id"],
         "player_info": []
     }
     
@@ -217,7 +218,6 @@ async def get_tiesheet(
             "user_id": row["user_id"],
             "username": row["username"],
             "is_winner": row["is_winner"],
-            "columns": user_columns.get(row["user_id"], [])
         })
     
     return tiesheet_data

@@ -68,6 +68,7 @@ async def get_tiesheet_by_id(db:AsyncSession, tiesheet_id : UUID, round_id : UUI
             Stage.name.label("stage_name"),
             Stage.id.label("stage_id"),
             Group.name.label("group_name"),
+            Group.id.label("group_id"),
             TiesheetPlayer.user_id,
             TiesheetPlayer.is_winner,
             User.username,
@@ -95,6 +96,7 @@ async def get_tiesheet_by_id(db:AsyncSession, tiesheet_id : UUID, round_id : UUI
             Stage.name.label("stage_name"),
             Stage.id.label("stage_id"),
             Group.name.label("group_name"),
+            Group.id.label("group_id"),
             TiesheetPlayer.user_id,
             TiesheetPlayer.is_winner,
             User.username,
@@ -122,6 +124,7 @@ async def test_api(db :AsyncSession, t_id : UUID):
             Stage.name.label("stage_name"),
             Stage.id.label("stage_id"),
             Group.name.label("group_name"),
+            
             func.json_agg(
                 func.json_build_object(
                     "user_id", TiesheetPlayer.user_id,

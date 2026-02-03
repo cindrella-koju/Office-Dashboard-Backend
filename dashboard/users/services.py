@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pwdlib import PasswordHash
 import jwt
 from uuid import UUID
-from users.schema import UserDetail
+from users.schema import UserDetail, UserDetailResponse
 from dotenv import load_dotenv
 import os
 from datetime import datetime,timedelta
@@ -23,7 +23,7 @@ async def get_all_users(db : AsyncSession, role : str | None = None):
     else:
         result = await db.execute(select(User).where(User.role == role.lower()))
     users = result.scalars().all()
-    return users
+    return [ UserDetailResponse.model_validate(user) for user in users]
 
 async def get_password_hash(password):
     return password_hash.hash(password)
