@@ -37,7 +37,6 @@ user_event_association = Table(
         ForeignKey("events.id", ondelete="CASCADE"),
         primary_key=True,
     ),
-    Column("is_winner", Boolean, default=False),
 )
 
 
@@ -69,43 +68,43 @@ class User(Mixins, Base):
     fullname: Mapped[str] = mapped_column(String(30), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(20), nullable=False)
 
+    # Association
+    # Many to many relationship
     events: Mapped[list["Event"]] = relationship(
         secondary=user_event_association,
         back_populates="users",
-        lazy="selectin",
     )
-    # standingcolumns : Mapped[list["StandingColumn"]] = relationship(
-    #     back_populates="users",
-    #     lazy="selectin",
-    #     cascade="all, delete-orphan",
-    # )
 
-    group_membership: Mapped["GroupMembers"] = relationship(
+    group_membership: Mapped[list["GroupMembers"]] = relationship(
         back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
+        cascade="save-update,delete-orphan",
     )
+
 
     column_values: Mapped[list["ColumnValues"]] = relationship(
         back_populates="user",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan",
     )
 
     qualifiers: Mapped[list["Qualifier"]] = relationship(
         back_populates="user",
-        cascade="all, delete-orphan"
+        cascade="save-update, delete-orphan"
+    )
+
+    userrole : Mapped[list["UserRole"]] = relationship(
+        back_populates="user",
+        cascade="save-update, delete-orphan"
+    )
+
+    tiesheetplayer : Mapped[list["TiesheetPlayer"]] = relationship(
+        back_populates="user",
+        cascade="save-update, delete-orphan"
     )
     def __repr__(self):
         return f"<User id={self.id} username={self.username}>"
 
-class Role(Mixins, Base):
-    __tablename__ = "role"
 
-    rolename : Mapped[str] = mapped_column(String(30), nullable=False)
- 
 class Event(Mixins, Base):
     __tablename__ = "events"
 
@@ -116,31 +115,128 @@ class Event(Mixins, Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     progress_note: Mapped[str] = mapped_column(String(255))
 
+    # Many to many relationship
     users: Mapped[list["User"]] = relationship(
         secondary=user_event_association,
         back_populates="events",
-        lazy="selectin",
     )
+
     stages: Mapped[list["Stage"]] = relationship(
-        "Stage",
         back_populates="event",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan",
     )
+
     groups: Mapped[list["Group"]] = relationship(
         "Group",
         back_populates="event",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-    qualifiers: Mapped[list["Qualifier"]] = relationship(
-        back_populates="event",
-        cascade="all, delete-orphan",
+        cascade="save-update, delete-orphan",
     )
 
+    qualifiers: Mapped[list["Qualifier"]] = relationship(
+        back_populates="event",
+        cascade="save-update, delete-orphan",
+    )
+    userrole : Mapped[list["UserRole"]] = relationship(
+        back_populates="event",
+        cascade="save-update,delete-orphan"
+    )
     def __repr__(self):
         return f"<Event id={self.id} title={self.title}>"
 
+class Role(Mixins, Base):
+    __tablename__ = "roles"
+
+    rolename: Mapped[str] = mapped_column(String(30), nullable=False)
+
+    can_edit: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_create: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_delete: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    can_edit_users: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_create_users: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_delete_users: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    can_edit_roles: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_create_roles: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_delete_roles: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    can_edit_events: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_create_events: Mapped[bool] = mapped_column(Boolean, default=False)
+    can_delete_events: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    can_manage_events: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    userrole: Mapped[list["UserRole"]] = relationship(
+        back_populates="role",
+        cascade="save-update, delete-orphan"
+    )
+
+    # One-to-one relationship
+    roleaccesspage: Mapped["RoleAccessPage"] = relationship(
+        "RoleAccessPage",
+        back_populates="role",
+        cascade="save-update, delete-orphan",
+        uselist=False
+    )
+
+    def __repr__(self):
+        return f"<Role id={self.id} rolename={self.rolename}>"
+    
+class UserRole(Mixins, Base):
+    __tablename__ = "userrole"
+
+    user_id : Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role_id : Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("roles.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    event: Mapped["Event"] = relationship(
+        back_populates="userrole",
+    )
+    user : Mapped["User"] = relationship(
+        back_populates="userrole"
+    )
+    role : Mapped["Role"] = relationship(
+        back_populates="userrole"
+    )
+
+    def __repr__(self):
+        return f"<UserRole id={self.id}>"
+
+class RoleAccessPage(Mixins, Base):
+    __tablename__ = "role_access_page"
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("roles.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True 
+    )
+    home_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    event_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    user_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    profile_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    tiesheet_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    group_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    round_config_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    qualifier_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    participants_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    column_config_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    group_stage_standing_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    todays_game_page: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # One-to-one relationship
+    role: Mapped["Role"] = relationship(
+        "Role",
+        back_populates="roleaccesspage"
+    )
 
 class Stage(Mixins, Base):
     __tablename__ = "stages"
@@ -154,31 +250,27 @@ class Stage(Mixins, Base):
     round_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     event: Mapped["Event"] = relationship(
-        "Event",
         back_populates="stages",
-        lazy="selectin",
     )
 
     groups: Mapped[list["Group"]] = relationship(
         back_populates="stage",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan",
     )
 
     tiesheets: Mapped[list["Tiesheet"]] = relationship(
         back_populates="stage",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan",
     )
 
     columns: Mapped[list["StandingColumn"]] = relationship(
         back_populates="stage",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan",
     )
+
     qualifiers: Mapped[list["Qualifier"]] = relationship(
         back_populates="stage",
-        cascade="all, delete-orphan",
+        cascade="save-update, delete-orphan",
     )
     def __repr__(self):
         return f"<Stage id={self.id} name={self.name}>"
@@ -198,24 +290,20 @@ class Group(Mixins, Base):
     )
 
     event: Mapped["Event"] = relationship(
-        "Event",
         back_populates="groups",
-        lazy="selectin",
     )
     name: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    stage: Mapped["Stage"] = relationship(back_populates="groups", lazy="selectin")
+    stage: Mapped["Stage"] = relationship(back_populates="groups")
 
     members: Mapped[list["GroupMembers"]] = relationship(
         back_populates="group",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan"
     )
 
     tiesheets: Mapped[list["Tiesheet"]] = relationship(
         back_populates="group",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan"
     )
 
     def __repr__(self):
@@ -239,8 +327,8 @@ class GroupMembers(Mixins, Base):
         nullable=False,
     )
 
-    group: Mapped["Group"] = relationship(back_populates="members", lazy="selectin")
-    user: Mapped["User"] = relationship(back_populates="group_membership", lazy="selectin")
+    group: Mapped["Group"] = relationship(back_populates="members")
+    user: Mapped["User"] = relationship(back_populates="group_membership")
 
     def __repr__(self):
         return f"<GroupMembers user_id={self.user_id} group_id={self.group_id}>"
@@ -253,27 +341,15 @@ class StandingColumn(Mixins, Base):
         ForeignKey("stages.id", ondelete="CASCADE"),
         nullable=False
     )
-
-    # event_id: Mapped[uuid.UUID] = mapped_column(
-    #     ForeignKey("events.id", ondelete="CASCADE"), nullable=False
-    # )
-
     column_field : Mapped[str] = mapped_column(String(255), nullable=False)
-
-    stage: Mapped["Stage"] = relationship(back_populates="columns", lazy="selectin")
-
-    values: Mapped[list["ColumnValues"]] = relationship(
-        back_populates="column",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-
     default_value : Mapped[str] = mapped_column(String(60), nullable=True)
-
     to_show : Mapped[bool] = mapped_column(Boolean,default=False)
 
-    # event: Mapped["Event"] = relationship(back_populates="standingcolumns")
-
+    stage: Mapped["Stage"] = relationship(back_populates="columns")
+    values: Mapped[list["ColumnValues"]] = relationship(
+        back_populates="column",
+        cascade="save-update, delete-orphan",
+    )
     def __repr__(self):
         return f"<Standing Column id={self.id} filed={self.column_field}>"
     
@@ -299,8 +375,8 @@ class ColumnValues(Mixins,Base):
             name="pk_columnvalues",
         ),
     )
-    user: Mapped["User"] = relationship(back_populates="column_values", lazy="selectin")
-    column: Mapped["StandingColumn"] = relationship(back_populates="values", lazy="selectin")
+    user: Mapped["User"] = relationship(back_populates="column_values")
+    column: Mapped["StandingColumn"] = relationship(back_populates="values")
 
     def __repr__(self):
         return f"<Column Value value={self.value}>"
@@ -333,13 +409,12 @@ class Tiesheet(Mixins, Base):
 
     players: Mapped[list["TiesheetPlayer"]] = relationship(
         back_populates="tiesheet",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="save-update, delete-orphan",
     )
 
-    group: Mapped["Group"] = relationship(back_populates="tiesheets", lazy="selectin")
-    stage: Mapped["Stage"] = relationship(back_populates="tiesheets", lazy="selectin")
-    match : Mapped[list["Match"]] = relationship(back_populates="tiesheet", cascade="all, delete-orphan")
+    group: Mapped["Group"] = relationship(back_populates="tiesheets")
+    stage: Mapped["Stage"] = relationship(back_populates="tiesheets")
+    match : Mapped[list["Match"]] = relationship(back_populates="tiesheet", cascade="save-update, delete-orphan")
 
     def __repr__(self):
         return f"<Tiesheet id={self.id} scheduled_at={self.scheduled_date}>"
@@ -350,19 +425,17 @@ class TiesheetPlayer(Mixins,Base):
 
     tiesheet_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tiesheets.id", ondelete="CASCADE"),
-        primary_key=True,
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
     )
 
     is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    tiesheet: Mapped["Tiesheet"] = relationship(back_populates="players", lazy="selectin")
-    user: Mapped["User"] = relationship(lazy="selectin")
-    matchscore : Mapped["Tiesheetplayermatchscore"] = relationship(back_populates="tiesheetplayer", cascade="all, delete-orphan")
+    tiesheet: Mapped["Tiesheet"] = relationship(back_populates="players")
+    user: Mapped["User"] = relationship(back_populates="tiesheetplayer")
+    matchscore : Mapped[list["Tiesheetplayermatchscore"]] = relationship(back_populates="tiesheetplayer", cascade="save-update, delete-orphan")
 
     def __repr__(self):
         return f"<TiesheetPlayer tiesheet_id={self.tiesheet_id} user_id={self.user_id} winner={self.is_winner}>"
@@ -374,10 +447,10 @@ class Match(Mixins, Base):
         ForeignKey("tiesheets.id", ondelete="CASCADE")
     )
 
-    match_name : Mapped[String] = mapped_column(String(50),nullable=False)
+    match_name : Mapped[str] = mapped_column(String(50),nullable=False)
 
     tiesheet: Mapped["Tiesheet"] = relationship(back_populates="match")
-    matchscore : Mapped["Tiesheetplayermatchscore"] = relationship(back_populates="match", cascade="all, delete-orphan")
+    matchscore : Mapped["Tiesheetplayermatchscore"] = relationship(back_populates="match", cascade="save-update, delete-orphan")
     
     def __repr__(self):
         return f"<Match match_id={self.id} match_name={self.match_name}>"
@@ -393,8 +466,8 @@ class Tiesheetplayermatchscore(Mixins, Base):
         ForeignKey("tiesheet_players.id", ondelete="CASCADE")
     )
 
-    points : Mapped[String] = mapped_column(String(50), nullable=True)
-    winner : Mapped[Boolean] = mapped_column(Boolean, default=False)
+    points : Mapped[str] = mapped_column(String(50), nullable=True)
+    winner : Mapped[bool] = mapped_column(Boolean, default=False)
     match : Mapped["Match"] = relationship(back_populates="matchscore")
     tiesheetplayer : Mapped["TiesheetPlayer"] = relationship(back_populates="matchscore")
 
@@ -432,4 +505,4 @@ class Qualifier(Mixins, Base):
     user: Mapped["User"] = relationship(back_populates="qualifiers")
 
     def __repr__(self):
-        return f"<Qualifier id={self.id}>"
+        return f"<Qualifier id={self.id}>"  
