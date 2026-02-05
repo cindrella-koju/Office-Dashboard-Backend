@@ -78,28 +78,28 @@ class User(Mixins, Base):
 
     group_membership: Mapped[list["GroupMembers"]] = relationship(
         back_populates="user",
-        cascade="save-update,delete-orphan",
+        cascade="save-update,delete, delete-orphan",
     )
 
 
     column_values: Mapped[list["ColumnValues"]] = relationship(
         back_populates="user",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
 
     qualifiers: Mapped[list["Qualifier"]] = relationship(
         back_populates="user",
-        cascade="save-update, delete-orphan"
+        cascade="save-update, delete, delete-orphan"
     )
 
     userrole : Mapped[list["UserRole"]] = relationship(
         back_populates="user",
-        cascade="save-update, delete-orphan"
+        cascade="save-update, delete, delete-orphan"
     )
 
     tiesheetplayer : Mapped[list["TiesheetPlayer"]] = relationship(
         back_populates="user",
-        cascade="save-update, delete-orphan"
+        cascade="save-update, delete, delete-orphan"
     )
     def __repr__(self):
         return f"<User id={self.id} username={self.username}>"
@@ -123,22 +123,22 @@ class Event(Mixins, Base):
 
     stages: Mapped[list["Stage"]] = relationship(
         back_populates="event",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
 
     groups: Mapped[list["Group"]] = relationship(
         "Group",
         back_populates="event",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
 
     qualifiers: Mapped[list["Qualifier"]] = relationship(
         back_populates="event",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
     userrole : Mapped[list["UserRole"]] = relationship(
         back_populates="event",
-        cascade="save-update,delete-orphan"
+        cascade="save-update,delete, delete-orphan"
     )
     def __repr__(self):
         return f"<Event id={self.id} title={self.title}>"
@@ -168,14 +168,14 @@ class Role(Mixins, Base):
     
     userrole: Mapped[list["UserRole"]] = relationship(
         back_populates="role",
-        cascade="save-update, delete-orphan"
+        cascade="save-update, delete, delete-orphan"
     )
 
     # One-to-one relationship
     roleaccesspage: Mapped["RoleAccessPage"] = relationship(
         "RoleAccessPage",
         back_populates="role",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
         uselist=False
     )
 
@@ -255,22 +255,22 @@ class Stage(Mixins, Base):
 
     groups: Mapped[list["Group"]] = relationship(
         back_populates="stage",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
 
     tiesheets: Mapped[list["Tiesheet"]] = relationship(
         back_populates="stage",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
 
     columns: Mapped[list["StandingColumn"]] = relationship(
         back_populates="stage",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
 
     qualifiers: Mapped[list["Qualifier"]] = relationship(
         back_populates="stage",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
     def __repr__(self):
         return f"<Stage id={self.id} name={self.name}>"
@@ -298,12 +298,12 @@ class Group(Mixins, Base):
 
     members: Mapped[list["GroupMembers"]] = relationship(
         back_populates="group",
-        cascade="save-update, delete-orphan"
+        cascade="save-update, delete, delete-orphan"
     )
 
     tiesheets: Mapped[list["Tiesheet"]] = relationship(
         back_populates="group",
-        cascade="save-update, delete-orphan"
+        cascade="save-update, delete, delete-orphan"
     )
 
     def __repr__(self):
@@ -348,7 +348,7 @@ class StandingColumn(Mixins, Base):
     stage: Mapped["Stage"] = relationship(back_populates="columns")
     values: Mapped[list["ColumnValues"]] = relationship(
         back_populates="column",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
     def __repr__(self):
         return f"<Standing Column id={self.id} filed={self.column_field}>"
@@ -409,12 +409,12 @@ class Tiesheet(Mixins, Base):
 
     players: Mapped[list["TiesheetPlayer"]] = relationship(
         back_populates="tiesheet",
-        cascade="save-update, delete-orphan",
+        cascade="save-update, delete, delete-orphan",
     )
 
     group: Mapped["Group"] = relationship(back_populates="tiesheets")
     stage: Mapped["Stage"] = relationship(back_populates="tiesheets")
-    match : Mapped[list["Match"]] = relationship(back_populates="tiesheet", cascade="save-update, delete-orphan")
+    match : Mapped[list["Match"]] = relationship(back_populates="tiesheet", cascade="save-update, delete, delete-orphan")
 
     def __repr__(self):
         return f"<Tiesheet id={self.id} scheduled_at={self.scheduled_date}>"
@@ -435,7 +435,7 @@ class TiesheetPlayer(Mixins,Base):
 
     tiesheet: Mapped["Tiesheet"] = relationship(back_populates="players")
     user: Mapped["User"] = relationship(back_populates="tiesheetplayer")
-    matchscore : Mapped[list["Tiesheetplayermatchscore"]] = relationship(back_populates="tiesheetplayer", cascade="save-update, delete-orphan")
+    matchscore : Mapped[list["Tiesheetplayermatchscore"]] = relationship(back_populates="tiesheetplayer", cascade="save-update, delete, delete-orphan")
 
     def __repr__(self):
         return f"<TiesheetPlayer tiesheet_id={self.tiesheet_id} user_id={self.user_id} winner={self.is_winner}>"
@@ -450,7 +450,7 @@ class Match(Mixins, Base):
     match_name : Mapped[str] = mapped_column(String(50),nullable=False)
 
     tiesheet: Mapped["Tiesheet"] = relationship(back_populates="match")
-    matchscore : Mapped["Tiesheetplayermatchscore"] = relationship(back_populates="match", cascade="save-update, delete-orphan")
+    matchscore : Mapped["Tiesheetplayermatchscore"] = relationship(back_populates="match", cascade="save-update, delete, delete-orphan")
     
     def __repr__(self):
         return f"<Match match_id={self.id} match_name={self.match_name}>"
