@@ -221,6 +221,7 @@ class RoleAccessPage(Mixins, Base):
     )
     home_page: Mapped[bool] = mapped_column(Boolean, default=False)
     event_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    role_page: Mapped[bool] = mapped_column(Boolean, default=False)
     user_page: Mapped[bool] = mapped_column(Boolean, default=False)
     profile_page: Mapped[bool] = mapped_column(Boolean, default=False)
     tiesheet_page: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
-from roles.schema import RolePermission, RoleResponse, EventRole, EventRoleResponse
+from roles.schema import RolePermission, RoleResponse, EventRole, EventRoleResponse, RoleDetail, EventDetail, UserDetail, WithinEventDetail, PageDetail
 from models import Role, RoleAccessPage, UserRole
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select, and_
@@ -47,6 +47,7 @@ async def create_role_with_permission( db: Annotated[AsyncSession, Depends(get_d
             column_config_page = roledetail.column_config_page,
             group_stage_standing_page = roledetail.group_stage_standing_page,
             todays_game_page = roledetail.todays_game_page,
+            role_page = roledetail.role_page
 
         )
         db.add(new_access_page)
@@ -104,6 +105,38 @@ async def get_role_by_permission(db: Annotated[AsyncSession, Depends(get_db_sess
     # return roledetail
     return reponse[0].role
 
+@router.get("/detail")
+async def get_permission_detail(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    role : bool | None = None, 
+    event: bool| None = None,
+    user : bool | None = None,
+    within_event : bool | None = None,
+    page_detail : bool | None = None
+):
+    stmt =  select(Role)
+
+    if page_detail:
+        stmt = stmt.options(selectinload(Role.roleaccesspage))
+
+    result = await db.execute(stmt)
+    role_detail = result.scalars().all()
+
+    if role:
+        return [RoleDetail.model_validate(rd) for rd in role_detail]
+    
+    if event:
+        return [EventDetail.model_validate(rd) for rd in role_detail]
+    
+    if user:
+        return [UserDetail.model_validate(rd) for rd in role_detail]
+    
+    if within_event:
+        return [WithinEventDetail.model_validate(rd) for rd in role_detail]
+    
+    if page_detail:
+        return role_detail
+    
 
 # Role id: 98fb6eb2-ccf9-4df6-98a3-4fcb291e8a3b
 # User id: ae347041-c28c-43ea-aee2-16b7ebecc7b0
