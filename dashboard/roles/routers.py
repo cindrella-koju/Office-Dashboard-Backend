@@ -126,7 +126,7 @@ async def get_permission_detail(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     permission_detail : PermissionDetailEnum
 ):
-    stmt =  select(Role)
+    stmt =  select(Role).order_by(Role.created_at)
 
     if permission_detail == PermissionDetailEnum.page:
         stmt = stmt.options(selectinload(Role.roleaccesspage))

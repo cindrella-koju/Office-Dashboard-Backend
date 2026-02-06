@@ -146,5 +146,4 @@ class RolePermissionEdit(BaseModel):
     can_edit_events : bool
     can_create_events : bool
     can_delete_events : bool
-    can_manage_events : bool
     roleaccessdetail: RolePageAccessResponse
