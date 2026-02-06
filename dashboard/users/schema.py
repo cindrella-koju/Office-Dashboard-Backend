@@ -12,7 +12,6 @@ class UserDetail(BaseModel):
     username : str
     fullname : str
     email : str
-    role : RoleEnum
     password : str
 
 class EditUserDetail(BaseModel):

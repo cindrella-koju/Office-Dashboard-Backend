@@ -30,7 +30,6 @@ async def signup_user(user : UserDetail, db : Annotated[AsyncSession,Depends(get
         username = user.username,
         fullname = user.fullname,
         email = user.email,
-        role = RoleEnum(user.role.value),
         password = await get_password_hash(user.password)
     )
 
