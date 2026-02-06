@@ -129,3 +129,22 @@ class PageDetail(BaseModel):
     id : UUID
     rolename : str
     roleaccesspage :RolePageAccessResponse
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RolePermissionEdit(BaseModel):
+    rolename : str
+    can_edit : bool
+    can_create : bool
+    can_delete : bool
+    can_edit_roles : bool
+    can_create_roles : bool
+    can_delete_roles : bool
+    can_edit_users : bool
+    can_create_users : bool
+    can_delete_users : bool
+    can_edit_events : bool
+    can_create_events : bool
+    can_delete_events : bool
+    can_manage_events : bool
+    roleaccessdetail: RolePageAccessResponse

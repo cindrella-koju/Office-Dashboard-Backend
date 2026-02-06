@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
-from roles.schema import RolePermission, RoleResponse, EventRole, EventRoleResponse, RoleDetail, EventDetail, UserDetail, WithinEventDetail, PageDetail
+from roles.schema import RolePermission, RoleResponse, EventRole, EventRoleResponse, RoleDetail, EventDetail, UserDetail, WithinEventDetail, PageDetail, RolePermissionEdit
 from models import Role, RoleAccessPage, UserRole
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, Enum
+import enum
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 
@@ -105,39 +106,62 @@ async def get_role_by_permission(db: Annotated[AsyncSession, Depends(get_db_sess
     # return roledetail
     return reponse[0].role
 
+class PermissionDetailEnum(enum.Enum):
+    role = "role"
+    event = "event"
+    user = "user"
+    within_event = "within_event"
+    page = "page"
+
+PERMISSION_DETAIL_SCHEMA = {
+    "role" : RoleDetail,
+    "event" : EventDetail,
+    "user" : UserDetail,
+    "within_event" : WithinEventDetail,
+    "page" : PageDetail
+}
+
 @router.get("/detail")
 async def get_permission_detail(
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    role : bool | None = None, 
-    event: bool| None = None,
-    user : bool | None = None,
-    within_event : bool | None = None,
-    page_detail : bool | None = None
+    permission_detail : PermissionDetailEnum
 ):
     stmt =  select(Role)
 
-    if page_detail:
+    if permission_detail == PermissionDetailEnum.page:
         stmt = stmt.options(selectinload(Role.roleaccesspage))
 
     result = await db.execute(stmt)
     role_detail = result.scalars().all()
 
-    if role:
-        return [RoleDetail.model_validate(rd) for rd in role_detail]
-    
-    if event:
-        return [EventDetail.model_validate(rd) for rd in role_detail]
-    
-    if user:
-        return [UserDetail.model_validate(rd) for rd in role_detail]
-    
-    if within_event:
-        return [WithinEventDetail.model_validate(rd) for rd in role_detail]
-    
-    if page_detail:
-        return role_detail
-    
+    permission_schema = PERMISSION_DETAIL_SCHEMA[permission_detail.value]
 
+    return [permission_schema.model_validate(rd) for rd in role_detail]
+
+    
+@router.put("/{role_id}")
+async def edit_role_and_permission(db: Annotated[AsyncSession, Depends(get_db_session)], permission_detail:RolePermissionEdit,role_id : UUID):
+    stmt = select(Role).options(selectinload(Role.roleaccesspage)).where(Role.id == role_id)
+    result = await db.execute(stmt)
+    role = result.scalar_one_or_none()
+
+    for field, value in permission_detail.dict(exclude={"roleaccessdetail"}).items():
+        setattr(role, field, value)
+
+    # Page access flags
+    if not role.roleaccesspage:
+        raise HTTPException(status_code=400, detail="Role access page not found")
+
+    for field, value in permission_detail.roleaccessdetail.dict().items():
+        setattr(role.roleaccesspage, field, value)
+
+    await db.commit()
+    await db.refresh(role)
+
+    return {
+        "message" : "Role Edited successfully"
+    }
+    # return [RolePermissionEdit.model_validate(rp) for rp in role_permission]
 # Role id: 98fb6eb2-ccf9-4df6-98a3-4fcb291e8a3b
 # User id: ae347041-c28c-43ea-aee2-16b7ebecc7b0
 # Event id : 9416e4bc-c260-45c4-a5ed-d453b58c1bf6
