@@ -146,7 +146,7 @@ class Event(Mixins, Base):
 class Role(Mixins, Base):
     __tablename__ = "roles"
 
-    rolename: Mapped[str] = mapped_column(String(30), nullable=False)
+    rolename: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
 
     can_edit: Mapped[bool] = mapped_column(Boolean, default=False)
     can_create: Mapped[bool] = mapped_column(Boolean, default=False)

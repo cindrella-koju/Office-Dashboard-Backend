@@ -1,4 +1,4 @@
-from models import User, UserRole
+from models import User, UserRole, Role, Event
 from sqlalchemy import select, or_
 from fastapi import HTTPException, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,11 +24,11 @@ REFRESH_TOKEN_EXPIRE_MINUTES = os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES")
 password_hash = PasswordHash.recommended()
 security = HTTPBearer()
 
-async def get_all_users(db : AsyncSession, role : str | None = None):
-    if role is None or role.lower() == "all":
+async def get_all_users(db : AsyncSession, role_id : str | None = None):
+    if role_id is None or role_id.lower() == "all":
         result = await db.execute(select(User))
     else:
-        result = await db.execute(select(User).where(User.role == role.lower()))
+        result = await db.execute(select(User).where(User.role == role_id.lower()))
     users = result.scalars().all()
     return [ UserDetailResponse.model_validate(user) for user in users]
 
@@ -210,3 +210,27 @@ async def signup_user_services(db : AsyncSession, user_data):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user"
         )
+    
+
+async def get_user_by_role(db: AsyncSession,role_id : UUID | None = None ):
+    """"
+        Extract user detail with role info
+    """
+    stmt = (
+        select(
+            User.id.label("user_id"),
+            User.username,
+            User.fullname,
+            User.email,
+            Role.id.label("role_id"),
+            Role.rolename
+        )
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, UserRole.role_id == Role.id)
+        .where(UserRole.event_id.is_(None))
+    )
+
+    if role_id:
+        stmt = stmt.where(UserRole.role_id == role_id)
+    result = await db.execute(stmt)
+    return result.mappings().all()

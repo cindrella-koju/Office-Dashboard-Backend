@@ -21,12 +21,12 @@ class EditUserDetail(BaseModel):
     role : RoleEnum | None = None
 
 class UserDetailResponse(BaseModel):
-    id : UUID
+    user_id : UUID
     username : str
     fullname : str
     email : str
-    created_at : datetime
-    updated_at : datetime
+    role_id : UUID
+    rolename : str
 
     model_config = ConfigDict(from_attributes=True)
 

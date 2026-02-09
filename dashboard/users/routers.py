@@ -6,11 +6,8 @@ from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,delete, or_
 from uuid import UUID
-from users.services import get_all_users,login_user_service, signup_user_services
+from users.services import get_all_users,login_user_service, signup_user_services, get_user_by_role
 from dependencies import get_current_user
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import SQLAlchemyError
-from roles.services import get_member_role_id
 router = APIRouter()
 
 @router.post("/signup")
@@ -37,7 +34,7 @@ async def login_user(user : LoginUser, db: Annotated[AsyncSession, Depends(get_d
 async def retrieve_user(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     # user_id: UUID | None = None,
-    role : str | None = None
+    role_id : str | None = None
     # current_user: dict = Depends(get_current_user),
 ):  
     # if current_user["role"] == RoleEnum.superadmin or current_user["role"] == RoleEnum.admin:
@@ -51,11 +48,12 @@ async def retrieve_user(
     #         )
     #     return UserDetailResponse(**user.__dict__)
     # else:
-    users = await get_all_users(db=db, role=role)
+    users = await get_user_by_role(db=db, role_id=role_id)
     if not users:
         return{
             "message" : "User not found"
         }
+
     return [UserDetailResponse.model_validate(user) for user in users]
     # raise HTTPException(
     #     detail="No Access",

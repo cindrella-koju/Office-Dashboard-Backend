@@ -91,20 +91,38 @@ async def create_user_role_in_event_with_permission(db: Annotated[AsyncSession, 
         "message" : "User Permission added successfully"
     }
 
-@router.get("/user/{user_id}/event/{event_id}")
-async def get_role_by_permission(db: Annotated[AsyncSession, Depends(get_db_session)], user_id : UUID,event_id : UUID):
-    stmt  = select(UserRole).options(selectinload(UserRole.role).selectinload(Role.roleaccesspage)).where(
-        and_(
-            UserRole.user_id == user_id,
-            UserRole.event_id == event_id
+@router.get("/user/{user_id}/event")
+async def get_role_by_permission(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_id: UUID,
+    event_id: UUID | None = None,
+):
+    base_stmt = (
+        select(UserRole)
+        .options(
+            selectinload(UserRole.role)
+            .selectinload(Role.roleaccesspage)
         )
+        .where(UserRole.user_id == user_id)
     )
-    result = await db.execute(stmt)
-    roledetail = result.scalars().all()
 
-    reponse = [EventRoleResponse.model_validate(rd) for rd in roledetail]
-    # return roledetail
-    return reponse[0].role
+    roledetail = []
+
+    if event_id is not None:
+        stmt = base_stmt.where(UserRole.event_id == event_id)
+        result = await db.execute(stmt)
+        roledetail = result.scalars().all()
+
+    if not roledetail:
+        result = await db.execute(base_stmt)
+        roledetail = result.scalars().all()
+
+    if not roledetail:
+        return None
+
+    response = [EventRoleResponse.model_validate(rd) for rd in roledetail]
+    return response[0].role
+
 
 class PermissionDetailEnum(enum.Enum):
     role = "role"
@@ -161,7 +179,19 @@ async def edit_role_and_permission(db: Annotated[AsyncSession, Depends(get_db_se
     return {
         "message" : "Role Edited successfully"
     }
-    # return [RolePermissionEdit.model_validate(rp) for rp in role_permission]
-# Role id: 98fb6eb2-ccf9-4df6-98a3-4fcb291e8a3b
-# User id: ae347041-c28c-43ea-aee2-16b7ebecc7b0
-# Event id : 9416e4bc-c260-45c4-a5ed-d453b58c1bf6
+
+
+@router.get("/filter")
+async def get_role_for_filter(db: Annotated[AsyncSession, Depends(get_db_session)],not_in_event: bool = False):
+    stmt = select(Role.id, Role.rolename.label("name"))
+
+    if not_in_event:
+        stmt = stmt.join(UserRole, UserRole.role_id == Role.id).where(UserRole.event_id.is_(None))
+
+    stmt = stmt.distinct()
+
+    result = await db.execute(stmt)
+
+    roles = [dict(row) for row in result.mappings().all()]
+
+    return roles
