@@ -191,7 +191,7 @@ class UserRole(Mixins, Base):
     )
     event_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
     role_id : Mapped[uuid.UUID] = mapped_column(
         ForeignKey("roles.id", ondelete="CASCADE"),

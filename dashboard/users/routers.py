@@ -1,58 +1,37 @@
 from fastapi import APIRouter,Depends, HTTPException, status, Header
 from users.schema import UserDetail, RoleEnum, UserDetailResponse, LoginUser, EditUserDetail
-from models import User
+from models import User, UserRole, Role
 from db_connect import get_db_session
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select,delete
+from sqlalchemy import select,delete, or_
 from uuid import UUID
-from users.services import get_all_users,get_password_hash, verify_password, generate_jwt_token, verify_jwt_token
+from users.services import get_all_users,login_user_service, signup_user_services
 from dependencies import get_current_user
-
+from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import SQLAlchemyError
+from roles.services import get_member_role_id
 router = APIRouter()
 
 @router.post("/signup")
-async def signup_user(user : UserDetail, db : Annotated[AsyncSession,Depends(get_db_session)] ):
-    users = await get_all_users(db=db)
-    for db_user in users:
-        if db_user.email == user.email:
-            raise HTTPException(
-                status_code = status.HTTP_409_CONFLICT,
-                detail = "Email already exists"
-            )
-        if db_user.username == user.username:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Username already exist"
-            )
+async def signup_user(user_data : UserDetail, db : Annotated[AsyncSession,Depends(get_db_session)] ):
+    """
+        Create new user and assign role member to that user
+    """
+    await signup_user_services(db, user_data)
+    return {"message": "User created successfully"}
         
-    user = User(
-        username = user.username,
-        fullname = user.fullname,
-        email = user.email,
-        password = await get_password_hash(user.password)
-    )
-
-    db.add(user)
-    await db.commit()
-    return {
-        "message" : "User created Successfully",
-        "id" : user.id
-    }
-
+    
 @router.post("/login")
 async def login_user(user : LoginUser, db: Annotated[AsyncSession, Depends(get_db_session)]):
-    result = await db.execute(select(User).where(User.username == user.username))
-    obtained_user = result.scalars().first()
-    verifypassword = await verify_password(user.password, obtained_user.password)
+    access_token, refresh_token= await login_user_service(db = db, login_data=user)
 
-    if verifypassword:
-        jwt_token = await generate_jwt_token(user_id=obtained_user.id, role=obtained_user.role)
-        return {
-            "message" : "Login Successfully",
-            "authorization" : "Bearer",
-            "token" : jwt_token
-        }
+    return {
+        "message": "Login successfully",
+        "authorization": "Bearer",
+        "access_token": access_token,
+        "refresh_token" : refresh_token
+    }
 
 @router.get("")
 async def retrieve_user(
@@ -164,15 +143,3 @@ async def delete_user(
     await db.commit()
 
     return {"message": f"User {user_id} deleted successfully"}
-
-# @router.get("/")
-# async def generate_field(page:str):
-#     if page == "event":
-#         return(
-#             "title" : "string"
-#             "description" : "string or none",
-#             "start date": "date",
-#             "end date" : "date",
-#             "status" : ["draft","active","completed"],
-#             "progress_note" : "string or none"
-#         )
