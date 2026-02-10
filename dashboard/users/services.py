@@ -78,18 +78,21 @@ async def verify_jwt_token(credential: HTTPAuthorizationCredentials = Depends(se
     
 async def get_user_by_email_or_username(
     db: AsyncSession,
-    email: str,
-    username: str
+    email: str | None = None,
+    username: str | None = None
 ):
-    """"
-        Extract user by email or username
     """
-    stmt = select(User).where(
-        or_(
-            User.email == email,
-            User.username == username
-        )
-    )
+    Extract user by email or username
+    """
+    conditions = []
+    if email is not None:
+        conditions.append(User.email == email)
+    if username is not None:
+        conditions.append(User.username == username)
+    
+    if not conditions:
+        return None
+    stmt = select(User).where(or_(*conditions))
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -175,7 +178,11 @@ async def signup_user_services(db : AsyncSession, user_data):
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already exists"
         )
-    role_id = await get_member_role_id(db)
+
+    if user_data.role_id:
+        role_id = user_data.role_id
+    else:
+        role_id = await get_member_role_id(db)
     # Check wheather member role exist or not
     if not role_id:
         raise HTTPException(
@@ -218,7 +225,7 @@ async def get_user_by_role(db: AsyncSession,role_id : UUID | None = None ):
     """
     stmt = (
         select(
-            User.id.label("user_id"),
+            User.id.label("id"),
             User.username,
             User.fullname,
             User.email,
@@ -234,3 +241,38 @@ async def get_user_by_role(db: AsyncSession,role_id : UUID | None = None ):
         stmt = stmt.where(UserRole.role_id == role_id)
     result = await db.execute(stmt)
     return result.mappings().all()
+
+async def edit_user_services(db: AsyncSession, user_data, user_id: UUID):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    role_info = await db.execute(select(UserRole).where(UserRole.user_id == user_id))
+    role = role_info.scalars().first()
+    if not role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+
+    # Check for username/email conflicts
+    if user_data.username:
+        existing_user = await get_user_by_email_or_username(db, username=user_data.username)
+        if existing_user and existing_user.id != user.id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+
+    if user_data.email:
+        existing_user = await get_user_by_email_or_username(db, email=user_data.email)
+        if existing_user and existing_user.id != user.id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+
+    # Update fields
+    if user_data.fullname:
+        user.fullname = user_data.fullname
+    if user_data.username:
+        user.username = user_data.username
+    if user_data.email:
+        user.email = user_data.email
+    if user_data.role_id:
+        role.role_id = user_data.role_id
+
+    await db.commit()
+    return {"message": "User updated successfully"}

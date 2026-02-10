@@ -13,15 +13,16 @@ class UserDetail(BaseModel):
     fullname : str
     email : str
     password : str
+    role_id : UUID | None = None
 
 class EditUserDetail(BaseModel):
     username : str | None = None
     fullname : str | None = None
     email : str | None = None
-    role : RoleEnum | None = None
+    role_id : UUID | None = None
 
 class UserDetailResponse(BaseModel):
-    user_id : UUID
+    id : UUID
     username : str
     fullname : str
     email : str
