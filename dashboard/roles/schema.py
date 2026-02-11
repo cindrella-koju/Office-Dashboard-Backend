@@ -15,20 +15,7 @@ class RolePermission(BaseModel):
     can_edit_events : bool
     can_create_events : bool
     can_delete_events : bool
-    can_manage_events : bool
-    home_page : bool
-    event_page : bool
-    user_page : bool
-    profile_page : bool
-    tiesheet_page : bool
-    group_page : bool
-    round_config_page : bool
-    qualifier_page : bool
-    participants_page : bool
-    column_config_page : bool
-    group_stage_standing_page : bool
-    todays_game_page : bool
-    role_page : bool
+    roleaccessdetail : RolePageAccessResponse
 
 class RoleResponse(BaseModel):
     id : UUID
@@ -46,7 +33,7 @@ class RoleResponse(BaseModel):
     can_create_events : bool
     can_delete_events : bool
 
-    can_manage_events : bool
+    # can_manage_events : bool
     roleaccesspage : RolePageAccessResponse
 
     model_config = ConfigDict(from_attributes=True)

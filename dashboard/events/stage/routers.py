@@ -18,36 +18,17 @@ async def create_stage(event_id : UUID,stage : StageDetail,  db : Annotated[Asyn
     )
 
     db.add(new_state)
-    await db.flush()
-    default_standing_col = [
-        {"column_field": "Match Played", "default_value": "0"},
-        {"column_field": "Win", "default_value": "0"},
-        {"column_field": "Loss", "default_value": "0"},
-        {"column_field": "Draw", "default_value": "0"},
-        {"column_field": "Points", "default_value": "0"},
-    ]
-
-    new_standing_columns = [
-        StandingColumn(
-            stage_id=new_state.id,
-            column_field=col["column_field"],
-            default_value=col["default_value"]
-        )
-        for col in default_standing_col
-    ]
-    
-    db.add_all(new_standing_columns)
     await db.commit()
     return{
         "message" : "Stage added successfully",
         "id" : new_state.id
     }
 
-@router.patch("")
+@router.patch("/{stage_id}")
 async def edit_stage(
     stage_detail: EditStageDetail,
     db: Annotated[AsyncSession,Depends(get_db_session)],
-    stage_id: UUID | None = None,
+    stage_id: UUID
 ):
     result = await db.execute(select(Stage).where(Stage.id == stage_id))
     stage = result.scalars().first()
@@ -96,10 +77,10 @@ async def retrieve_stage(
             )
         return [StageResponse(**stage.__dict__) for stage in stages]
     
-@router.delete("")
+@router.delete("/{stage_id}")
 async def delete_stage(
     db: Annotated[AsyncSession,Depends(get_db_session)],
-    stage_id: UUID | None = None,
+    stage_id: UUID
 ):
     result = await db.execute(select(Stage).where(Stage.id == stage_id))
     stage = result.scalars().first()
@@ -114,7 +95,7 @@ async def delete_stage(
     await db.commit()
 
     return {
-        "message" : f"Stage {stage_id} deleted successfully"
+        "message" : f"Stage {stage.name} deleted successfully"
     }
 
 

@@ -5,7 +5,7 @@ from typing import Annotated
 from roles.schema import RolePermission, RoleResponse, EventRole, EventRoleResponse, RoleDetail, EventDetail, UserDetail, WithinEventDetail, PageDetail, RolePermissionEdit
 from models import Role, RoleAccessPage, UserRole
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import select, and_, Enum
+from sqlalchemy import select,delete
 import enum
 from sqlalchemy.orm import selectinload
 from uuid import UUID
@@ -29,26 +29,26 @@ async def create_role_with_permission( db: Annotated[AsyncSession, Depends(get_d
             can_edit_events = roledetail.can_edit_events,
             can_create_events = roledetail.can_create_events,
             can_delete_events = roledetail.can_delete_events,
-            can_manage_events = roledetail.can_manage_events
+            # can_manage_events = roledetail.can_manage_events
         )
         db.add(new_role)
         await db.flush()
-
+        roleaccess = roledetail.roleaccessdetail
         new_access_page = RoleAccessPage(
             role_id = new_role.id,
-            home_page = roledetail.home_page,
-            event_page = roledetail.event_page,
-            user_page = roledetail.user_page,
-            profile_page = roledetail.profile_page,
-            tiesheet_page = roledetail.tiesheet_page,
-            group_page = roledetail.group_page,
-            round_config_page = roledetail.round_config_page,
-            qualifier_page = roledetail.qualifier_page,
-            participants_page = roledetail.participants_page,
-            column_config_page = roledetail.column_config_page,
-            group_stage_standing_page = roledetail.group_stage_standing_page,
-            todays_game_page = roledetail.todays_game_page,
-            role_page = roledetail.role_page
+            home_page = roleaccess.home_page,
+            event_page = roleaccess.event_page,
+            user_page = roleaccess.user_page,
+            profile_page = roleaccess.profile_page,
+            tiesheet_page = roleaccess.tiesheet_page,
+            group_page = roleaccess.group_page,
+            round_config_page = roleaccess.round_config_page,
+            qualifier_page = roleaccess.qualifier_page,
+            participants_page = roleaccess.participants_page,
+            column_config_page = roleaccess.column_config_page,
+            group_stage_standing_page = roleaccess.group_stage_standing_page,
+            todays_game_page = roleaccess.todays_game_page,
+            role_page = roleaccess.role_page
 
         )
         db.add(new_access_page)
@@ -195,3 +195,24 @@ async def get_role_for_filter(db: Annotated[AsyncSession, Depends(get_db_session
     roles = [dict(row) for row in result.mappings().all()]
 
     return roles
+
+@router.delete("/{role_id}")
+async def delete_role_and_permission(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    role_id : UUID
+):
+    result = await db.execute(select(Role).where(Role.id == role_id))
+    role = result.scalars().first()
+
+    if not role:
+        raise HTTPException(
+            detail="Role not found"
+        )
+    
+    stmt = delete(Role).where(Role.id == role_id)
+    await db.execute(stmt)
+    await db.commit()
+
+    return {
+        "message" : f"Role {role.rolename} deleted successfully"
+    }
