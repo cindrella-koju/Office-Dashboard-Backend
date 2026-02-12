@@ -2,6 +2,13 @@ from pydantic import BaseModel,ConfigDict
 from typing import List
 from uuid import UUID
 
+
+class ParticipantsNotInGroup(BaseModel):
+    id : UUID
+    username : str
+
+    model_config = ConfigDict(from_attributes=True)
+
 class Participants(BaseModel):
     user_id : List[UUID]
 

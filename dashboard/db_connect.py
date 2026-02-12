@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 db_url = os.getenv("DATABASE_CONNECTION_STRING")
 
-engine = create_async_engine(db_url, echo=True)
+engine = create_async_engine(db_url)
 
 AsyncSessionLocal = sessionmaker(
     bind=engine,

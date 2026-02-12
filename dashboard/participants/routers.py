@@ -1,6 +1,6 @@
 from models import user_event_association, User, Event, GroupMembers, Event, Stage, Group, StandingColumn, ColumnValues, Qualifier
 from fastapi import APIRouter, Depends, HTTPException, status
-from participants.schema import Participants, ParticipantsUserResponse, ParticipantsEventResponse, UserResponse
+from participants.schema import Participants, ParticipantsUserResponse, ParticipantsEventResponse, UserResponse, ParticipantsNotInGroup
 from db_connect import get_db_session
 from dependencies import get_current_user
 from typing import Annotated
@@ -9,6 +9,7 @@ from users.schema import RoleEnum
 from sqlalchemy import insert, select,and_, outerjoin
 from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
+from participants.services import ParticipantsServices
 
 router = APIRouter()
 
@@ -99,11 +100,7 @@ async def create_participants(
 async def extract_participant_by_event(
     event_id : UUID,
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    current_user: dict = Depends(get_current_user)
-):
-    if current_user["role"] != RoleEnum.superadmin and current_user["role"] != RoleEnum.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    
+):  
     stmt = (
         select(
             user_event_association.c.user_id,
@@ -148,14 +145,6 @@ async def extract_participant_by_event(
     return [ParticipantsUserResponse(**p) for p in participants]
 
     
-# from sqlalchemy import select
-
-# stmt = select(user_event_association).where(
-#     user_event_association.c.event_id == event.id,
-#     user_event_association.c.is_winner == True
-# )
-
-# winners = session.execute(stmt).all()
 
 async def extract_participants(event_id: UUID, db: AsyncSession):
     stmt = (
@@ -220,133 +209,13 @@ async def retrieve_user_not_in_qualifier(stage_id : UUID,event_id : UUID,db: Ann
     ]
 
 
-# @router.get("/not-in-group")
-# async def participants_not_in_group(event_id: UUID,stage_id : UUID, db: Annotated[AsyncSession,Depends(get_db_session)], group_id : UUID | None = None):
-#     if group_id:
-#         result = await db.execute(
-#             select(GroupMembers.user_id, User.username)
-#             .join(User, User.id == GroupMembers.user_id)
-#             .where(GroupMembers.group_id == group_id)
-#         )
-
-#         users = result.all()
-
-#         user_in_group = [
-#             {
-#                 "id": row.user_id,
-#                 "username": row.username
-#             }
-#             for row in users
-#         ]
-    
-#     subq = (
-#         select(GroupMembers.user_id)
-#         .join(Group)
-#         .join(Stage)
-#         .where(
-#             and_(
-#                 Stage.event_id == event_id,
-#                 Stage.id == stage_id
-#             )
-#         )
-#     )
-
-
-#     stmt = (
-#         select(User.id,User.username)
-#         .join(user_event_association, User.id == user_event_association.c.user_id)
-#         .where(user_event_association.c.event_id == event_id)
-#         .where(~User.id.in_(subq))
-#     )
-
-#     result = await db.execute(stmt)
-#     users = result.all()
-
-#     participants = [
-#         {"id": u[0], "username": u[1]} for u in users
-#     ]
-
-#     if group_id:
-#         participants = participants + user_in_group
-
-#     return {
-#         "participants" : participants
-#     }
-
-
 @router.get("/not-in-group/event/{event_id}/stage/{stage_id}")
 async def participants_not_in_group(event_id : UUID, stage_id:UUID, db: Annotated[AsyncSession,Depends(get_db_session)], group_id : UUID | None = None):
-    if group_id:
-        result = await db.execute(
-            select(GroupMembers.user_id, User.username)
-            .join(User, User.id == GroupMembers.user_id)
-            .where(GroupMembers.group_id == group_id)
-        )
-
-        users = result.all()
-
-        user_in_group = [
-            {
-                "id": row.user_id,
-                "username": row.username
-            }
-            for row in users
-        ]
-
-    subq = (select(GroupMembers.user_id)
-        .join(Group)
-        .join(Stage)
-        .where(
-        and_(
-                Group.stage_id == stage_id,
-                Stage.event_id == event_id,
-            )
-        )
-    ).subquery()
-    
-    stmt2 = select(User.id,User.username).join(Qualifier).where(
-        and_(
-            Qualifier.event_id == event_id ,
-            Qualifier.stage_id == stage_id,
-            Qualifier.user_id.not_in(subq)
-        )
+    participants_not_in_group = await ParticipantsServices.get_participants_not_in_group(
+        db = db,
+        event_id=event_id,
+        stage_id=stage_id,
+        group_id=group_id
     )
 
-    group_result = await db.execute(stmt2)
-    group_member = group_result.all()
-
-    participants = [
-        {
-            "id" : p.id,
-            "username" : p.username
-        }
-        for p in group_member
-    ]
-
-    if group_id:
-        participants = participants + user_in_group
-        
-    return participants
-
-
-# [
-#   {
-#     "id": "c397aa12-2214-4796-a1d0-4d1dc8c28974"
-#   },
-#   {
-#     "id": "04d36c46-d7c1-4e06-8250-cdfd4bbb80f3"
-#   },
-#   {
-#     "id": "8f9f0c0f-d3a2-4181-a6f0-7ba5813f4cb6"
-#   },
-#   {
-#     "id": "a8958723-f998-48ea-b7c1-92647c874e98"
-#   },
-#   {
-#     "id": "06ffbc8a-9bca-4979-bbc9-3477e0800eef"
-#   },
-#   {
-#     "id": "c68eae35-907d-4998-9f3d-b9a20b1ed937"
-#   }
-# ]
-
+    return [ParticipantsNotInGroup.model_validate(pg) for pg in participants_not_in_group]

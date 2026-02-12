@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from events.group.schema import GroupDetail, GroupUpdate, AddGroupMember, GroupTableUpdate
-from models import Group, GroupMembers, User,StandingColumn, ColumnValues, Stage, Event
+from models import Group, GroupMembers, User,StandingColumn, ColumnValues, Stage, Event, Qualifier
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
-from sqlalchemy import select, delete, and_
+from sqlalchemy import select, delete, and_, func
 from uuid import UUID
 from db_connect import get_db_session
 from sqlalchemy.exc import SQLAlchemyError
+from events.group.service import GroupServices
+from collections import defaultdict
+from sqlalchemy.orm import selectinload
 router = APIRouter()
 
 @router.post("")
@@ -59,177 +62,12 @@ async def extract_group_by_event(stage_id:UUID,db: Annotated[AsyncSession, Depen
         }
         for group in group_info
     ]
-
-# @router.get("")
-# async def retrieve_group(
-#     db: Annotated[AsyncSession, Depends(get_db_session)],
-#     group_id: UUID | None = None,
-# ):
-#     try:
-#         gm = GroupMembers
-#         g = Group
-#         u = User
-#         sc = StandingColumn
-#         cv = ColumnValues
-#         s = Stage
-#         stmt = (
-#             select(
-#                 g.id.label("group_id"),
-#                 g.name.label("group_name"),
-#                 g.stage_id.label("stage_id"),
-#                 s.name.label("stage_name"),
-#                 u.id.label("user_id"),
-#                 u.username.label("username"),
-#                 sc.id.label("column_id"),
-#                 sc.column_field,
-#                 cv.value
-#             )
-#             .join(gm, g.id == gm.group_id)
-#             .join(u, gm.user_id == u.id)
-#             .join(sc, sc.stage_id == g.stage_id)  # all columns for the group's stage
-#             .outerjoin(cv, (cv.user_id == u.id) & (cv.column_id == sc.id))  # LEFT JOIN for values
-#         )
-
-#         if group_id:
-#             stmt = stmt.where(g.id == group_id)
-
-#         result = await db.execute(stmt)
-#         rows = result.all()
-
-
-#         # group_dict = {}
-#         # for row in rows:
-#         #     sid = row.stage_id
-#         #     if sid not in group_dict:
-#         #         group_dict[sid] = {
-#         #             "stage_id": row.stage_id,
-#         #             "stage_name" : row.stage_name,
-#         #             "groups" : {}
-#         #         }
-
-#         #     gid = row.group_id
-#         #     if gid not in group_dict[sid]["groups"]:
-#         #         group_dict[sid]["groups"][gid] = {
-#         #             "group_id": row.group_id,
-#         #             "group_name": row.group_name,
-#         #             "members": {}
-#         #         }
-
-#         #     uid = row.user_id
-#         #     if uid not in group_dict[sid]["groups"][gid]["members"]:
-#         #         group_dict[sid]["groups"][gid]["members"][uid] = {
-#         #             "user_id": row.user_id,
-#         #             "username": row.username,
-#         #             "columns": []
-#         #         }
-
-#         #     group_dict[sid]["groups"][gid]["members"][uid]["columns"].append({
-#         #         "column_id": row.column_id,
-#         #         "column_field": row.column_field,
-#         #         "value": row.value
-#         #     })
-
-#         # for gdata in group_dict.values():
-#         #     gdata["groups"] = list(gdata["groups"].values())
-#         #     for group in gdata["groups"]:
-#         #         group["members"] = list(group["members"].values())
-
-#         # return list(group_dict.values())
-
-#         return [
-#             {
-#                 "round_name" : r.stage_name,
-#                 "id" : r.stage_id
-#             }
-#             for r in rows
-#         ]
-
-#     except Exception as e:
-#         return {"message": "Failed to retrieve groups", "error": str(e)}
     
 
 @router.get("/event/{event_id}")
 async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],event_id : UUID):
-    
-    query = (
-        select(
-            User.username.label("username"),
-            GroupMembers.user_id,
-            Stage.id.label("stage_id"),
-            Stage.name.label("stage_name"),
-            Group.id.label("group_id"),
-            Group.name.label("group_name"),
-            StandingColumn.column_field.label("column_name"),
-            StandingColumn.id.label("column_id"),
-            ColumnValues.value.label("column_value")
-        )
-        .join(Group, Group.id == GroupMembers.group_id)
-        .join(Stage, Stage.id == Group.stage_id)
-        .join(StandingColumn,StandingColumn.stage_id == Stage.id)
-        .join(ColumnValues, and_(ColumnValues.column_id == StandingColumn.id, ColumnValues.user_id == GroupMembers.user_id))
-        .join(User,User.id == GroupMembers.user_id)
-        .where(
-            and_(
-                Group.event_id == event_id,
-                Stage.event_id == event_id
-            ))
-    )
-    
-    result = await db.execute(query)
-    rows = result.mappings().all()
+    return await GroupServices.get_group_detail_in_event_services(db=db, event_id=event_id)
 
-    group_dict = {}
-    for row in rows:
-        sid = row.stage_id
-        gid = row.group_id
-        uid = row.user_id
-        if sid not in group_dict:
-            group_dict[sid] = {
-                "stage_id": row.stage_id,
-                "stage_name" : row.stage_name,
-                "groups" : {}
-            }
-        if gid not in group_dict[sid]["groups"]:
-            group_dict[sid]["groups"][gid] = {
-                "group_id": row.group_id,
-                "group_name": row.group_name,
-                "members": {}
-            }
-
-            # print("User Id:",uid)
-        if uid not in group_dict[sid]["groups"][gid]["members"]:
-            group_dict[sid]["groups"][gid]["members"][uid] = {
-                "user_id": row.user_id,
-                "username": row.username,
-                "columns": []
-            }
-
-        group_dict[sid]["groups"][gid]["members"][uid]["columns"].append({
-            "column_id": row.column_id,
-            "column_field": row.column_name,
-            "value": row.column_value
-        })
-
-    for gdata in group_dict.values():
-        gdata["groups"] = list(gdata["groups"].values())
-        for group in gdata["groups"]:
-            group["members"] = list(group["members"].values())
-
-    return list(group_dict.values())
-    # return [{
-    #     "username":s.username,
-    #     "user_id" : s.user_id,
-    #     "stage_name" : s.stage_name,
-    #     "stage_id" : s.stage_id,
-    #     "group_id" : s.group_id,
-    #     "group_name" : s.group_name,
-    #     "column_name" : s.column_name,
-    #     "column_id" : s.column_id,
-    #     "column_value" : s.column_value
-    # }
-
-    #     for s in rows
-    # ]
 
 @router.patch("/{group_id}")
 async def update_group(
@@ -247,8 +85,7 @@ async def update_group(
 
         if group_update.name is not None:
             group.name = group_update.name
-        if group_update.stage_id is not None:
-            group.stage_id = group_update.stage_id
+
 
         # Update participants if provided
         if group_update.participants_id is not None:
@@ -290,7 +127,7 @@ async def delete_group(
     await db.commit()
 
     return {
-        "message" : f"Group {group_id} deleted successfully"
+        "message" : f"Group {group.name} deleted successfully"
     }
     
 @router.post("/player")
@@ -358,26 +195,36 @@ async def delete_group_member(
     group_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    stmt = select(GroupMembers).where(
-        GroupMembers.user_id == user_id,
-        GroupMembers.group_id == group_id
+    stmt = (
+        select(GroupMembers, User.username, Group.name)
+        .join(User, GroupMembers.user_id == User.id)
+        .join(Group, GroupMembers.group_id == Group.id)
+        .where(
+            GroupMembers.user_id == user_id,
+            GroupMembers.group_id == group_id
+        )
     )
-    result = await db.execute(stmt)
-    groupmember = result.scalar_one_or_none()
 
-    if not groupmember:
+    result = await db.execute(stmt)
+    row = result.one_or_none()
+
+    if not row:
         raise HTTPException(status_code=404, detail="Group Member not found")
-    
-    stmt = delete(GroupMembers).where(
-        GroupMembers.user_id == user_id,
-        GroupMembers.group_id == group_id
+
+    _, username, group_name = row
+
+    await db.execute(
+        delete(GroupMembers).where(
+            GroupMembers.user_id == user_id,
+            GroupMembers.group_id == group_id
+        )
     )
-    await db.execute(stmt)
     await db.commit()
 
     return {
-        "message" : f"Member {user_id} removed from group {group_id} successfully"
+        "message": f"Member {username} removed from group {group_name} successfully"
     }
+
 
 
 @router.get("/byround")

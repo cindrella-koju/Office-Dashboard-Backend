@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from events.schema import StatusEnum
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import HTTPException, status
 
 async def extract_all_event(db: AsyncSession, status: str | None = None):
     stmt = select(Event).order_by(Event.created_at)
@@ -87,3 +88,19 @@ async def create_event_services(db: AsyncSession, event):
             "message": "Failed to add Event",
             "error": str(e)
         }
+
+
+class EventServices:
+    @staticmethod
+    async def validate_event(
+        db: AsyncSession,
+        event_id: UUID,
+    ):
+        result = await db.execute(select(Event).where(Event.id == event_id))
+        event = result.scalar_one_or_none()
+
+        if not event:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Event not found"
+            )
