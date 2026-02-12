@@ -30,7 +30,7 @@ async def create_group(
 
         members = [
                 GroupMembers(group_id=new_group.id, user_id=user_id)
-                for user_id in group.participants_id
+                for user_id in group.participants_ids
             ]
         db.add_all(members)
 
@@ -39,7 +39,7 @@ async def create_group(
         return {
             "message": "Group added Successfully",
             "id": new_group.id,
-            "members" : [user_id for user_id in group.participants_id]
+            "members" : [user_id for user_id in group.participants_ids]
         }
     except SQLAlchemyError as e:
         await db.rollback()
@@ -76,6 +76,7 @@ async def update_group(
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
     try:
+        print("Participants:",group_update.participants_ids)
         stmt = select(Group).where(Group.id == group_id)
         result = await db.execute(stmt)
         group = result.scalar_one_or_none()
@@ -86,16 +87,17 @@ async def update_group(
         if group_update.name is not None:
             group.name = group_update.name
 
-
+        # if group_update.round_id is not None:
+        #     group.stage_id = group_update.round_id
         # Update participants if provided
-        if group_update.participants_id is not None:
+        if group_update.participants_ids is not None:
             # Delete existing members
             await db.execute(delete(GroupMembers).where(GroupMembers.group_id == group_id))
             
             # Add new members
             new_members = [
                 GroupMembers(group_id=group_id, user_id=user_id)
-                for user_id in group_update.participants_id
+                for user_id in group_update.participants_ids
             ]
             db.add_all(new_members)
 

@@ -66,7 +66,7 @@ async def retrieve_stage(
                 detail="Stage not found",
                 status_code=status.HTTP_404_NOT_FOUND
             )
-        return StageResponse(**stage.__dict__)
+        return StageResponse.model_validate(stage)
     else:
         result = await db.execute(select(Stage).where(Stage.event_id == event_id))
         stages = result.scalars().all()
@@ -75,7 +75,7 @@ async def retrieve_stage(
                 detail="Stage not found",
                 status_code=status.HTTP_404_NOT_FOUND
             )
-        return [StageResponse(**stage.__dict__) for stage in stages]
+        return [StageResponse.model_validate(stage) for stage in stages]
     
 @router.delete("/{stage_id}")
 async def delete_stage(
@@ -105,6 +105,6 @@ async def rounds(db: Annotated[AsyncSession,Depends(get_db_session)], event_id :
     result = await db.execute(stmt)
     stages = result.scalars().all()
 
-    stageinfo = [RoundInfo.from_orm(stage) for stage in stages]
+    stageinfo = [RoundInfo.model_validate(stage) for stage in stages]
 
     return stageinfo

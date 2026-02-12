@@ -5,7 +5,7 @@ from typing import Optional, List
 class GroupDetail(BaseModel):
     round_id : UUID
     name : str
-    participants_id : List[UUID]
+    participants_ids : List[UUID]
 
 class EditGroupDetail(BaseModel):
     stage_id : Optional[UUID] = None
@@ -13,7 +13,8 @@ class EditGroupDetail(BaseModel):
 
 class GroupUpdate(BaseModel):
     name: str | None = None
-    participants_id: List[UUID] | None = None
+    round_id : UUID | None = None
+    participants_ids: List[UUID] | None = None
 
 class AddGroupMember(BaseModel):
     group_id : UUID

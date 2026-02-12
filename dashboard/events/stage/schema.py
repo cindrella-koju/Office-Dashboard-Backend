@@ -17,6 +17,9 @@ class CreateStateForm(BaseModel):
 
 class StageResponse(StageDetail):
     id : uuid.UUID
+    name : str | None = None
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class RoundInfo(BaseModel):
     id : uuid.UUID
