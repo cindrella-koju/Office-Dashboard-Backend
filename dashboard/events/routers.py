@@ -32,6 +32,7 @@ async def create_event(
     # current_user: dict = Depends(get_current_user),
 ):
     # if current_user["role"] == RoleEnum.superadmin and current_user["role"] == RoleEnum.admin
+    print("")
     result = await create_event_services(db=db, event=event)
     return result
 

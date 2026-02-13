@@ -6,7 +6,7 @@ from dependencies import get_current_user
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from users.schema import RoleEnum
-from sqlalchemy import insert, select,and_, outerjoin
+from sqlalchemy import insert, select,and_, delete
 from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 from participants.services import ParticipantsServices
@@ -25,7 +25,6 @@ async def create_participants(
             {
                 "user_id": p,
                 "event_id": event_id,
-                "is_winner": False,
             }
             for p in participants.user_id
         ]
@@ -219,3 +218,39 @@ async def participants_not_in_group(event_id : UUID, stage_id:UUID, db: Annotate
     )
 
     return [ParticipantsNotInGroup.model_validate(pg) for pg in participants_not_in_group]
+
+
+@router.delete("/{user_id}/event/{event_id}")
+async def delete_participants(user_id : UUID, event_id : UUID, db: Annotated[AsyncSession,Depends(get_db_session)]):
+    username = await ParticipantsServices.extract_participants_username(db = db, user_id=user_id, event_id=event_id)
+    try:
+        # Delete Participants
+        stmt = delete(user_event_association).where(
+            and_(
+                user_event_association.c.user_id == user_id,
+                user_event_association.c.event_id == event_id
+            )
+        )
+
+        # Delete Qualifier
+        stmt2 = delete(Qualifier).where(
+            and_(
+                Qualifier.event_id == event_id,
+                Qualifier.user_id == user_id
+            )
+        )
+        await db.execute(stmt)
+        await db.execute(stmt2)
+        await db.commit()
+
+        return{
+            "message" : f"Participants {username} deleted successfully"
+        }
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occured:{str(e)}"
+        )
+
+

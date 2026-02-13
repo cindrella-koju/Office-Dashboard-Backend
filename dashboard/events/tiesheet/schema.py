@@ -21,7 +21,7 @@ class EditTiesheetPlayers(BaseModel):
 
 
 class CreateTiesheet(BaseModel):
-    group_id: UUID | None = None
+    group_id: UUID | str | None = None
     stage_id: UUID
     scheduled_date: date
     scheduled_time: time

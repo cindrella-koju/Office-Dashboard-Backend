@@ -34,7 +34,7 @@ async def login_user(user : LoginUser, db: Annotated[AsyncSession, Depends(get_d
 async def retrieve_user(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     role_id : str | None = None,
-    current_user: dict = Depends(get_current_user),
+    # current_user: dict = Depends(get_current_user),
 ):  
     users = await get_user_by_role(db=db, role_id=role_id)
     if not users:

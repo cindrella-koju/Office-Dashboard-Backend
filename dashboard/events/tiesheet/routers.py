@@ -17,13 +17,22 @@ async def create_tiesheet(
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
     try:
-        new_tiesheet = Tiesheet(
-            group_id=tiesheet_detail.group_id,
-            stage_id=tiesheet_detail.stage_id,
-            scheduled_date=tiesheet_detail.scheduled_date,
-            status = TiesheetStatus(tiesheet_detail.status),
-            scheduled_time=tiesheet_detail.scheduled_time
-        )
+        print("Group ID:", tiesheet_detail.group_id)
+        if tiesheet_detail.group_id != "":
+            new_tiesheet = Tiesheet(
+                group_id=tiesheet_detail.group_id,
+                stage_id=tiesheet_detail.stage_id,
+                scheduled_date=tiesheet_detail.scheduled_date,
+                status = TiesheetStatus(tiesheet_detail.status),
+                scheduled_time=tiesheet_detail.scheduled_time
+            )
+        else:
+            new_tiesheet = Tiesheet(
+                stage_id=tiesheet_detail.stage_id,
+                scheduled_date=tiesheet_detail.scheduled_date,
+                status = TiesheetStatus(tiesheet_detail.status),
+                scheduled_time=tiesheet_detail.scheduled_time
+            )
 
         db.add(new_tiesheet)
         await db.flush()

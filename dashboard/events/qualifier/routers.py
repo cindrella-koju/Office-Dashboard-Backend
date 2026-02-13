@@ -6,10 +6,11 @@ from dependencies import get_current_user
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from users.schema import RoleEnum
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, delete
 from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
+from events.qualifier.services import QualifierService
 
 class QualifierModel(BaseModel):
     user_id : list[UUID]
@@ -92,6 +93,7 @@ async def retrieve_qualifiers_by_event(
 ):
     stmt = (
         select(
+            Qualifier.id.label("qualifier_id"),
             User.id.label("user_id"),
             User.email,
             User.username,
@@ -111,14 +113,28 @@ async def retrieve_qualifiers_by_event(
     for row in info:
         round_name = row["round_name"]
         user_data = {
+            "qualifier_id" : row["qualifier_id"],
             "user_id": row["user_id"],
             "username": row["username"],
             "email" : row["email"]
         }
-
         if round_name not in grouped:
             grouped[round_name] = {"round_name": round_name, "qualifier": []}
         
         grouped[round_name]["qualifier"].append(user_data)
 
     return list(grouped.values())
+
+@router.delete("/{qualifier_id}")
+async def delete_qualifier(
+    qualifier_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)]
+):
+    qualifier =  await QualifierService.extract_username_from_qualifier_id(db = db, qualifier_id=qualifier_id)
+    stmt = delete(Qualifier).where(Qualifier.id == qualifier_id)
+    await db.execute(stmt)
+    await db.commit()
+
+    return{
+        "message" : f"Qualifier {qualifier} deleted successfully"
+    }

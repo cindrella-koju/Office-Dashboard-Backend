@@ -3,10 +3,56 @@ from sqlalchemy import UUID
 from events.stage.services import StageServices
 from events.group.service import GroupServices
 from events.services import EventServices
-from models import GroupMembers, Group, Stage, User, Qualifier
+from models import GroupMembers, Group, Stage, User, Qualifier, user_event_association
 from sqlalchemy import select, and_
+from fastapi import HTTPException, status
 
 class ParticipantsServices:
+    @staticmethod
+    async def validate_participants(
+        db:AsyncSession,
+        user_id: UUID,
+        event_id : UUID
+    ):
+        result = await db.execute(
+            select(user_event_association)
+            .where(
+                and_(
+                    user_event_association.c.user_id == user_id,
+                    user_event_association.c.event_id == event_id
+                )
+            ))
+        participants = result.scalar_one_or_none()
+
+        if not participants:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Round not found"
+            )
+        
+    @staticmethod
+    async def extract_participants_username(db=AsyncSession, event_id = UUID, user_id = UUID):
+        await ParticipantsServices.validate_participants(db=db, event_id=event_id, user_id=user_id)
+
+        stmt = (
+            select(User.username)
+            .join(
+                user_event_association,
+                User.id == user_event_association.c.user_id
+            )
+            .where(
+                and_(
+                    user_event_association.c.user_id == user_id,
+                    user_event_association.c.event_id == event_id
+                )
+            )
+        )
+
+        result = await db.execute(stmt)
+        username = result.scalar_one_or_none()
+
+        return username
+    
     @staticmethod
     async def get_participants_not_in_group( 
         db : AsyncSession, 
