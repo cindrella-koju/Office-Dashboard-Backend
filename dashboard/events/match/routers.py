@@ -15,10 +15,15 @@ class UserInfo(BaseModel):
     user_id : UUID
     winner : bool
 
-class CreateMatch(BaseModel):
-    tiesheet_id : UUID
+class MatchDetail(BaseModel):
     match_name : str
     userDetail : List[UserInfo]
+
+class CreateMatchRequest(BaseModel):
+    overallwinner : UUID | str
+    status : str
+    tiesheet_id : UUID
+    matchDetail : List[MatchDetail]
 
 class CreateTiesheetPlayerMatchScore(BaseModel):
     tiesheetplayer_id : UUID
@@ -27,41 +32,77 @@ class CreateTiesheetPlayerMatchScore(BaseModel):
 @router.post("")
 async def create_match(
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    match_detail: list[CreateMatch]
+    request: CreateMatchRequest,
 ):
     try:
-        for md in match_detail:
+        # Update tiesheet status if provided
+        if request.status:
+             stmt = select(Tiesheet).where(Tiesheet.id == request.tiesheet_id)
+             result = await db.execute(stmt)
+             tiesheet = result.scalars().one_or_none()
+
+             if tiesheet is None:
+                 raise HTTPException(status_code=404, detail="Tiesheet not found")
+
+             tiesheet.status = request.status
+             db.add(tiesheet)
+
+        # Update overall winner if status is completed and winner is selected
+        if request.status == "completed" and request.overallwinner != "":
+            stmt = select(TiesheetPlayer).where(
+                TiesheetPlayer.tiesheet_id == request.tiesheet_id,
+                TiesheetPlayer.user_id == request.overallwinner
+            )
+            result = await db.execute(stmt)
+            tiesheet_player = result.scalars().one_or_none()
+
+            if tiesheet_player is None:
+                raise HTTPException(status_code=404, detail="Tiesheet player not found for overall winner")
+
+            tiesheet_player.is_winner = True
+            db.add(tiesheet_player)
+
+        # Create matches and their scores
+        for match_data in request.matchDetail:
+            # Create match
             match = Match(
-                tiesheet_id=md.tiesheet_id,
-                match_name=md.match_name
+                tiesheet_id=request.tiesheet_id,
+                match_name=match_data.match_name
             )
             db.add(match)
             await db.flush()
 
-            for ud in md.userDetail:
+            # Create match scores for each user
+            for user_detail in match_data.userDetail:
                 tiesheetplayer_id = await extract_tiesheet_player_id(
                     db=db,
-                    user_id=ud.user_id,
-                    tiesheet_id=md.tiesheet_id
+                    user_id=user_detail.user_id,
+                    tiesheet_id=request.tiesheet_id
                 )
 
                 if tiesheetplayer_id is None:
-                    raise ValueError("Tiesheet player not found")
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Tiesheet player not found for user_id: {user_detail.user_id}"
+                    )
 
                 pms = Tiesheetplayermatchscore(
                     match_id=match.id,
                     tiesheetplayer_id=tiesheetplayer_id,
-                    points=ud.points,
-                    winner=ud.winner
+                    points=user_detail.points if user_detail.points else None,
+                    winner=user_detail.winner
                 )
                 db.add(pms)
 
         await db.commit()
-        return {"message": "Match Detail added Successfully"}
+        return {"message": "Match details added successfully"}
 
+    except HTTPException:
+        await db.rollback()
+        raise
     except SQLAlchemyError as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 # @router.post("{match_id}/score")
