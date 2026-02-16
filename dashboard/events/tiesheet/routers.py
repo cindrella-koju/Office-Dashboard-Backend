@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from models import Tiesheet, TiesheetPlayer, Group, Stage, Event, User, StandingColumn, ColumnValues
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
-from sqlalchemy import select, and_
+from sqlalchemy import select, delete
 from uuid import UUID
 from db_connect import get_db_session
 from sqlalchemy.exc import SQLAlchemyError
@@ -131,24 +131,8 @@ async def retrieve_tiesheet(
             "user_id": uid,
             "is_winner": row["is_winner"],
             "username": row["username"],
-            "columns": [],
         }
 
-        # Fetch column data for this player
-        columns = await extract_standing_column_and_value_of_user(
-            user_id=uid,
-            stage_id=sid,
-            db=db,
-        )
-
-        player["columns"] = [
-                {
-                    "column_field": c.column_field,
-                    "value": c.value,
-                    "to_show": str(c.to_show),
-                }
-                for c in columns
-            ]
         tiesheets[tid]["player_info"].append(player)
 
     return list(tiesheets.values())
@@ -314,8 +298,23 @@ async def update_tiesheet(
             detail=f"Failed to update tiesheet: {str(e)}"
         )
     
-# @router.get("tttttttttt")
-# async def test(db : Annotated[AsyncSession, Depends(get_db_session)], tiesheet_id : UUID):
-#     info = await test_api(db, t_id = tiesheet_id)
+@router.delete("/{tiesheet_id}")
+async def delete_tiesheet(
+    db: Annotated[AsyncSession,Depends(get_db_session)],
+    tiesheet_id : UUID
+):
+    result = await db.execute(select(Tiesheet).where(Tiesheet.id == tiesheet_id))
+    tiesheet = result.scalars().first()
+    if not tiesheet:
+        raise HTTPException(
+            detail="Tiesheet not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    stmt = delete(Tiesheet).where(Tiesheet.id == tiesheet_id)
+    await db.execute(stmt)
+    await db.commit()
 
-#     return info
+    return{
+        "message" : "Tiesheet deleted successfully"
+    }

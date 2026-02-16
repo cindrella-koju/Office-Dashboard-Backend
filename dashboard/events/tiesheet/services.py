@@ -42,6 +42,7 @@ async def get_tiesheet_with_player(event_id : UUID, db : AsyncSession, stage_id 
         .join(User, User.id == TiesheetPlayer.user_id)
         .outerjoin(Group, Group.id == Tiesheet.group_id)
         .where(Event.id == event_id)
+        .order_by(Tiesheet.created_at)
     )
 
     if stage_id:
@@ -201,3 +202,11 @@ async def update_tiesheet_player(db: AsyncSession, tiesheet_id: UUID, player_dat
                 value=column_input.value
             )
             db.add(new_column_value)
+
+
+async def get_tiesheet( db : AsyncSession, tiesheet_id : UUID):
+    stmt = select(Tiesheet).where(Tiesheet.id == tiesheet_id)
+    result = await db.execute(stmt)
+    tiesheet = result.scalars().one_or_none()
+
+    return tiesheet
