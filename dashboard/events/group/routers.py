@@ -1,15 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from events.group.schema import GroupDetail, GroupUpdate, AddGroupMember, GroupTableUpdate
-from models import Group, GroupMembers, User,StandingColumn, ColumnValues, Stage, Event, Qualifier
+from fastapi import APIRouter, Depends
+from events.group.schema import GroupDetail, GroupUpdate, AddGroupMember, GroupTableUpdate, GroupEvent, GroupByRound, GroupMember
+from models import Group, GroupMembers, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
-from sqlalchemy import select, delete, and_, func
+from sqlalchemy import select, delete
 from uuid import UUID
 from db_connect import get_db_session
-from sqlalchemy.exc import SQLAlchemyError
 from events.group.service import GroupServices
-from collections import defaultdict
-from sqlalchemy.orm import selectinload
+from events.group.crud import extract_group_by_id
+
 router = APIRouter()
 
 @router.post("")
@@ -18,50 +17,16 @@ async def create_group(
     group: GroupDetail,
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ):
-    try:
-        new_group = Group(
-            stage_id=group.round_id,
-            name=group.name,
-            event_id= event_id
-        )
-
-        db.add(new_group)
-        await db.flush()  # ensures new_group.id is available
-
-        members = [
-                GroupMembers(group_id=new_group.id, user_id=user_id)
-                for user_id in group.participants_ids
-            ]
-        db.add_all(members)
-
-        await db.commit()
-
-        return {
-            "message": "Group added Successfully",
-            "id": new_group.id,
-            "members" : [user_id for user_id in group.participants_ids]
-        }
-    except SQLAlchemyError as e:
-        await db.rollback()
-        return {
-            "message": "Failed to add group",
-            "error": str(e)
-        }
+    await GroupServices.create_group(db=db, group=group, event_id=event_id)
 
 
 @router.get("/info/{stage_id}")
 async def extract_group_by_event(stage_id:UUID,db: Annotated[AsyncSession, Depends(get_db_session)]):
-    stmt = select(Group.id,Group.name).where(Group.stage_id == stage_id)
+    stmt = select(Group.id,Group.name.label("groupname")).where(Group.stage_id == stage_id)
     result = await db.execute(stmt)
     group_info = result.all()
 
-    return [
-        {
-            "id" :  group.id,
-            "groupname" : group.name
-        }
-        for group in group_info
-    ]
+    return [GroupEvent.model_validate(gi) for gi in group_info]
     
 
 @router.get("/event/{event_id}")
@@ -75,61 +40,21 @@ async def update_group(
     group_update: GroupUpdate,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    try:
-        print("Participants:",group_update.participants_ids)
-        stmt = select(Group).where(Group.id == group_id)
-        result = await db.execute(stmt)
-        group = result.scalar_one_or_none()
-
-        if not group:
-            raise HTTPException(status_code=404, detail="Group not found")
-
-        if group_update.name is not None:
-            group.name = group_update.name
-
-        # if group_update.round_id is not None:
-        #     group.stage_id = group_update.round_id
-        # Update participants if provided
-        if group_update.participants_ids is not None:
-            # Delete existing members
-            await db.execute(delete(GroupMembers).where(GroupMembers.group_id == group_id))
-            
-            # Add new members
-            new_members = [
-                GroupMembers(group_id=group_id, user_id=user_id)
-                for user_id in group_update.participants_ids
-            ]
-            db.add_all(new_members)
-
-        await db.commit()
-
-        return {
-            "message": "Group updated successfully",
-            "group_id": group.id,
-        }
-
-    except SQLAlchemyError as e:
-        await db.rollback()
-        return {"message": "Failed to update group", "error": str(e)}   
+    return await GroupServices.update_group(db=db, group_update=group_update, group_id=group_id) 
     
 @router.delete("/{group_id}")
 async def delete_group(
     group_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    stmt = select(Group).where(Group.id == group_id)
-    result = await db.execute(stmt)
-    group = result.scalar_one_or_none()
-
-    if not group:
-        raise HTTPException(status_code=404, detail="Group not found")
+    await extract_group_by_id(db=db, group_id=group_id)
     
     stmt = delete(Group).where(Group.id == group_id)
     await db.execute(stmt)
     await db.commit()
 
     return {
-        "message" : f"Group {group.name} deleted successfully"
+        "message" : f"Group deleted successfully"
     }
     
 @router.post("/player")
@@ -145,7 +70,6 @@ async def add_group_member(
     await db.commit()
     return{
         "message" : "Group Member added successfully",
-        "id" : new_group_member.id
     }
 
 
@@ -156,39 +80,7 @@ async def update_group_table_data(
     table_update: GroupTableUpdate,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    try:
-        for member_data in table_update.members:
-            for column_data in member_data.columns:
-                # Check if column value exists
-                stmt = select(ColumnValues).where(
-                    ColumnValues.user_id == member_data.user_id,
-                    ColumnValues.column_id == column_data.column_id
-                )
-                result = await db.execute(stmt)
-                existing_value = result.scalar_one_or_none()
-
-                print("Existing value:",existing_value)
-                if existing_value:
-                    # Update existing value
-                    existing_value.value = column_data.value
-                else:
-                    # Create new column value
-                    new_value = ColumnValues(
-                        user_id=member_data.user_id,
-                        column_id=column_data.column_id,
-                        value=column_data.value
-                    )
-                    db.add(new_value)
-
-        await db.commit()
-        return {
-            "message": "Group table data updated successfully",
-            "group_id": group_id
-        }
-
-    except SQLAlchemyError as e:
-        await db.rollback()
-        return {"message": "Failed to update group table data", "error": str(e)}
+    return await GroupServices.update_group_table_data(db=db, table_update=table_update, group_id=group_id)
     
 
 @router.delete("/member/{user_id}/group/{group_id}")
@@ -197,36 +89,7 @@ async def delete_group_member(
     group_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    stmt = (
-        select(GroupMembers, User.username, Group.name)
-        .join(User, GroupMembers.user_id == User.id)
-        .join(Group, GroupMembers.group_id == Group.id)
-        .where(
-            GroupMembers.user_id == user_id,
-            GroupMembers.group_id == group_id
-        )
-    )
-
-    result = await db.execute(stmt)
-    row = result.one_or_none()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Group Member not found")
-
-    _, username, group_name = row
-
-    await db.execute(
-        delete(GroupMembers).where(
-            GroupMembers.user_id == user_id,
-            GroupMembers.group_id == group_id
-        )
-    )
-    await db.commit()
-
-    return {
-        "message": f"Member {username} removed from group {group_name} successfully"
-    }
-
+    return await GroupServices.delete_group_member(db=db, user_id=user_id, group_id=group_id)
 
 
 @router.get("/byround")
@@ -238,14 +101,7 @@ async def extract_group_by_round(
     result = await db.execute(stmt)
     group_info = result.mappings().all()
 
-    return [
-        {
-            "id" : gi.id,
-            "name" : gi.name
-        }
-
-        for gi in group_info
-    ]
+    return [GroupByRound.model_validate(gi) for gi in group_info]
 
 @router.get("/member")
 async def extract_member_of_group(
@@ -258,14 +114,6 @@ async def extract_member_of_group(
         .where(GroupMembers.group_id == group_id)
     )
     result = await db.execute(stmt)
-
     group_member = result.mappings().all()
 
-    return [
-        {
-            "id" : gm.user_id,
-            "username" : gm.username
-        }
-
-        for gm in group_member
-    ]
+    return [GroupMember.model_validate(gm) for gm in group_member]

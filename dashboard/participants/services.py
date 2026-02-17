@@ -1,11 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import UUID
-from events.stage.services import StageServices
+from events.stage.crud import extract_stage_by_id
 from events.group.service import GroupServices
-from events.services import EventServices
 from models import GroupMembers, Group, Stage, User, Qualifier, user_event_association
 from sqlalchemy import select, and_
 from fastapi import HTTPException, status
+from events.crud import extract_event_by_id
+from exception import HTTPNotFound
 
 class ParticipantsServices:
     @staticmethod
@@ -60,8 +61,10 @@ class ParticipantsServices:
         stage_id : UUID,
         group_id : UUID | None = None
     ):
-        await EventServices.validate_event(db=db, event_id=event_id)
-        await StageServices.validate_stage(db = db, stage_id=stage_id)
+        event = await extract_event_by_id( db=db, event_id=event_id)
+        if not event:
+            HTTPNotFound("Event not found")
+        await extract_stage_by_id(db = db, stage_id=stage_id)
 
         if group_id:
             await GroupServices.validate_group(db = db, group_id=group_id)

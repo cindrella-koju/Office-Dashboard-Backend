@@ -2,9 +2,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import Event, Stage, StandingColumn
 from uuid import UUID
 from sqlalchemy import select
-from events.schema import StatusEnum
+from events.schema import StatusEnum, EditEventDetail, EventDetailResponse
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException, status
+from exception import HTTPNotFound
+from events.crud import extract_event_by_id
 
 async def extract_all_event(db: AsyncSession, status: str | None = None):
     stmt = select(Event).order_by(Event.created_at)
@@ -13,12 +14,11 @@ async def extract_all_event(db: AsyncSession, status: str | None = None):
 
     result = await db.execute(stmt)
     events = result.scalars().all()
-    return events
 
-async def extract_one_event(db:AsyncSession, event_id : UUID):
-    result = await db.execute(select(Event).where(Event.id == event_id))
-    event = result.scalars().first()
-    return event
+    if not events:
+        raise HTTPNotFound("Event not found")
+    return [EventDetailResponse.model_validate(event) for event in events]
+
 
 async def create_event(db: AsyncSession, event):
     new_event = Event(
@@ -40,7 +40,6 @@ async def create_default_round(db: AsyncSession, new_event: Event):
     new_round = Stage(
         event_id=new_event.id,
         name="Round 1",
-        round_order=1
     )
 
     db.add(new_round)
@@ -89,18 +88,31 @@ async def create_event_services(db: AsyncSession, event):
             "error": str(e)
         }
 
+async def edit_event_services( db: AsyncSession, event_id : UUID, event_detail : EditEventDetail):
+    event = await extract_event_by_id(db=db, event_id=event_id)
+    if not event:
+        raise HTTPNotFound("Event not found")
+    
+    if event_detail.title:
+        event.title = event_detail.title
 
-class EventServices:
-    @staticmethod
-    async def validate_event(
-        db: AsyncSession,
-        event_id: UUID,
-    ):
-        result = await db.execute(select(Event).where(Event.id == event_id))
-        event = result.scalar_one_or_none()
+    if event_detail.description:
+        event.description = event_detail.description
 
-        if not event:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Event not found"
-            )
+    if event_detail.startdate:
+        event.startdate = event_detail.startdate
+
+    if event_detail.enddate:
+        event.enddate = event_detail.enddate
+
+    if event_detail.status:
+        event.status = StatusEnum(event_detail.status)
+
+    if event_detail.progress_note:
+        event.progress_note = event_detail.progress_note
+
+    await db.commit()
+
+    return{
+        "message" : "Event Updated Successfully"
+    }

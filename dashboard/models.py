@@ -247,7 +247,6 @@ class Stage(Mixins, Base):
     )
 
     name: Mapped[str] = mapped_column(String(30), nullable=False)
-    round_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     event: Mapped["Event"] = relationship(
         back_populates="stages",

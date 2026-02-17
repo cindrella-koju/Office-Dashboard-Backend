@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from typing import Optional, List
 
@@ -30,3 +30,21 @@ class MemberColumnUpdate(BaseModel):
 
 class GroupTableUpdate(BaseModel):
     members: List[MemberColumnUpdate]
+
+class GroupEvent(BaseModel):
+    id : UUID
+    groupname : str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class GroupByRound(BaseModel):
+    id : UUID
+    name : str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class GroupMember(BaseModel):
+    id: UUID
+    username : str
+
+    model_config = ConfigDict(from_attributes=True)
