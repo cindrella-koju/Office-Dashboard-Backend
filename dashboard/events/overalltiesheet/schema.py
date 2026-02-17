@@ -1,6 +1,6 @@
 from typing import List, Dict
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class ColumnDetail(BaseModel):
     column_name: str
@@ -15,5 +15,7 @@ class Round(BaseModel):
     round_name: str
     users: List[User]
 
+    model_config = ConfigDict(from_attributes=True)
+    
 ResponseSchema = Dict[str, Round]
  

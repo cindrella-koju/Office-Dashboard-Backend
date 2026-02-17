@@ -7,7 +7,7 @@ from sqlalchemy import select, delete
 from uuid import UUID
 from db_connect import get_db_session
 from events.standingcolumn.schema import CreateColumn, EditColumn, CreateValues, ColumnResponse
-
+# from 
 router = APIRouter()
 
 @router.post("")
@@ -20,7 +20,6 @@ async def create_column(
             stage_id=columnDetail.stage_id,
             column_field=columnDetail.column_field,
             default_value=columnDetail.default_value,
-            to_show = bool(columnDetail.to_show)
         )
 
         db.add(new_column)
@@ -73,8 +72,6 @@ async def edit_column(column_id : UUID,columnDetail : EditColumn, db : Annotated
     if columnDetail.column_field:
         column.column_field = columnDetail.column_field
 
-    if columnDetail.to_show:
-        column.to_show = columnDetail.to_show == "True"
 
 
     await db.commit()
@@ -86,6 +83,7 @@ async def edit_column(column_id : UUID,columnDetail : EditColumn, db : Annotated
 
 @router.get("")
 async def retrieve_column(db : Annotated[AsyncSession,Depends(get_db_session)],stage_id : UUID):
+    # try:
     result = await db.execute(select(StandingColumn).where(StandingColumn.stage_id == stage_id))
     stages = result.scalars().all()
     # if not stages:
@@ -93,7 +91,8 @@ async def retrieve_column(db : Annotated[AsyncSession,Depends(get_db_session)],s
     #         detail="Stage not found",
     #         status_code=status.HTTP_404_NOT_FOUND
     #     )
-    return [ColumnResponse.from_orm(stage) for stage in stages]
+    return [ColumnResponse.model_validate(stage) for stage in stages]
+# except SW;
 
 @router.delete("/{column_id}")
 async def delete_column(column_id : UUID,db : Annotated[AsyncSession,Depends(get_db_session)]):

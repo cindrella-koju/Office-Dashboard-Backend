@@ -8,7 +8,7 @@ import datetime
 
 async def extract_standing_column_and_value_of_user(user_id : UUID, stage_id:UUID, db: AsyncSession):
     stmt = (
-        select(StandingColumn.column_field, ColumnValues.value, StandingColumn.stage_id, ColumnValues.user_id, StandingColumn.to_show)
+        select(StandingColumn.column_field, ColumnValues.value, StandingColumn.stage_id, ColumnValues.user_id)
         .join(ColumnValues,StandingColumn.id == ColumnValues.column_id)
         .where(
             and_(
@@ -204,9 +204,3 @@ async def update_tiesheet_player(db: AsyncSession, tiesheet_id: UUID, player_dat
             db.add(new_column_value)
 
 
-async def get_tiesheet( db : AsyncSession, tiesheet_id : UUID):
-    stmt = select(Tiesheet).where(Tiesheet.id == tiesheet_id)
-    result = await db.execute(stmt)
-    tiesheet = result.scalars().one_or_none()
-
-    return tiesheet

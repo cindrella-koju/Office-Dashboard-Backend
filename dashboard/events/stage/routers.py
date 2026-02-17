@@ -8,7 +8,7 @@ from uuid import UUID
 from db_connect import get_db_session
 from events.stage.services import StageServices
 from events.stage.crud import extract_stage_by_id
-
+from sqlalchemy.orm import selectinload
 router = APIRouter()
 
 @router.post("")
@@ -50,6 +50,26 @@ async def delete_stage(
 @router.get("/rounds")
 async def rounds(db: Annotated[AsyncSession,Depends(get_db_session)], event_id : UUID): 
     stmt = select(Stage).where(Stage.event_id == event_id).order_by(Stage.created_at)
+    result = await db.execute(stmt)
+    stages = result.scalars().all()
+
+    return [RoundInfo.model_validate(stage) for stage in stages]
+
+# Extract round only with standing column
+@router.get("/rounds/standingcolumn")
+async def retrieve_round_with_standing_column(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    event_id: UUID
+):
+    stmt = (
+        select(Stage)
+        .options(selectinload(Stage.columns))
+        .where(
+            Stage.event_id == event_id,
+            Stage.columns.any()   # only stages that have columns
+        )
+    )
+
     result = await db.execute(stmt)
     stages = result.scalars().all()
 

@@ -342,7 +342,6 @@ class StandingColumn(Mixins, Base):
     )
     column_field : Mapped[str] = mapped_column(String(255), nullable=False)
     default_value : Mapped[str] = mapped_column(String(60), nullable=True)
-    to_show : Mapped[bool] = mapped_column(Boolean,default=False)
 
     stage: Mapped["Stage"] = relationship(back_populates="columns")
     values: Mapped[list["ColumnValues"]] = relationship(
