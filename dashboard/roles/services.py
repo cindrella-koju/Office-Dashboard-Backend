@@ -1,7 +1,7 @@
 from models import Role, RoleAccessPage, UserRole
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from roles.schema import RoleDetail, EventRoleResponse, RolePermissionEdit
+from roles.schema import RoleDetail, EventRoleResponse, RolePermissionEdit, CreateRoleDetail
 from  sqlalchemy.exc import SQLAlchemyError
 from uuid import UUID
 from  sqlalchemy.orm import selectinload
@@ -17,11 +17,11 @@ async def get_member_role_id(db: AsyncSession):
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
-async def create_role_services( db:AsyncSession, roledetail : RoleDetail ):
+async def create_role_services( db:AsyncSession, roledetail : CreateRoleDetail ):
     """ Services to create Role along with the permission of Role"""
     try:
         new_role = Role(
-            rolename = roledetail.rolename,
+            rolename = roledetail.rolename.lower(),
             can_edit = roledetail.can_edit,
             can_create = roledetail.can_create,
             can_delete = roledetail.can_delete,

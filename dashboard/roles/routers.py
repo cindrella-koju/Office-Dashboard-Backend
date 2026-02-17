@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
-from roles.schema import RoleDetail, RoleResponse, EventRole,RoleDetail,RolePermissionEdit
+from roles.schema import RoleDetail, RoleResponse, EventRole,RoleDetail,RolePermissionEdit, CreateRoleDetail
 from models import Role, UserRole
 from sqlalchemy import select,delete
 from enums import PermissionDetailEnum
@@ -14,7 +14,7 @@ from roles.services import create_role_services, get_role_by_permssion_services,
 router = APIRouter()
 
 @router.post("")
-async def create_role_with_permission( db: Annotated[AsyncSession, Depends(get_db_session)], roledetail : RoleDetail):
+async def create_role_with_permission( db: Annotated[AsyncSession, Depends(get_db_session)], roledetail : CreateRoleDetail):
     return await create_role_services( db=db, roledetail=roledetail)
 
 @router.get("")

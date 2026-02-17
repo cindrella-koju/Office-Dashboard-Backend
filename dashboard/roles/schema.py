@@ -18,7 +18,7 @@ class RolePageAccessResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     
-class RoleDetail(BaseModel):
+class CreateRoleDetail(BaseModel):
     rolename : str
     can_edit : bool
     can_create : bool

@@ -1,4 +1,4 @@
-from fastapi import APIRouter,Depends, HTTPException, status, Header
+from fastapi import APIRouter,Depends
 from users.schema import UserDetail,UserDetailResponse, LoginUser, EditUserDetail
 from models import User
 from db_connect import get_db_session
@@ -43,7 +43,7 @@ async def login_user(
 async def retrieve_user(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     role_id : str | None = None,
-    # current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):  
     users = await get_user_by_role(db=db, role_id=role_id)
     if not users:
@@ -58,7 +58,7 @@ async def edit_user(
     edit_detail : EditUserDetail,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID,
-    # current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     return await edit_user_services(db=db, user_data=edit_detail, user_id=user_id)
 
