@@ -18,7 +18,7 @@ class RolePageAccessResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     
-class RolePermission(BaseModel):
+class RoleDetail(BaseModel):
     rolename : str
     can_edit : bool
     can_create : bool
@@ -50,7 +50,6 @@ class RoleResponse(BaseModel):
     can_create_events : bool
     can_delete_events : bool
 
-    # can_manage_events : bool
     roleaccesspage : RolePageAccessResponse
 
     model_config = ConfigDict(from_attributes=True)

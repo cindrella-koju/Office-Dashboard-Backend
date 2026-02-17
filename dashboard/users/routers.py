@@ -6,12 +6,18 @@ from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,delete
 from uuid import UUID
-from users.services import login_user_service, signup_user_services, get_user_by_role, edit_user_services
+from users.services import login_user_service, signup_user_services, edit_user_services
+from users.crud import get_user_by_role, get_user_by_id
 from dependencies import get_current_user
+from exception import HTTPNotFound
+
 router = APIRouter()
 
 @router.post("/signup")
-async def signup_user(user_data : UserDetail, db : Annotated[AsyncSession,Depends(get_db_session)] ):
+async def signup_user(
+    user_data : UserDetail,
+    db : Annotated[AsyncSession,Depends(get_db_session)] 
+):
     """
         Create new user and assign role member to that user
     """
@@ -20,7 +26,10 @@ async def signup_user(user_data : UserDetail, db : Annotated[AsyncSession,Depend
         
     
 @router.post("/login")
-async def login_user(user : LoginUser, db: Annotated[AsyncSession, Depends(get_db_session)]):
+async def login_user(
+    user : LoginUser, 
+    db: Annotated[AsyncSession, Depends(get_db_session)]
+):
     access_token, refresh_token= await login_user_service(db = db, login_data=user)
 
     return {
@@ -49,7 +58,7 @@ async def edit_user(
     edit_detail : EditUserDetail,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID,
-    current_user: dict = Depends(get_current_user)
+    # current_user: dict = Depends(get_current_user)
 ):
     return await edit_user_services(db=db, user_data=edit_detail, user_id=user_id)
 
@@ -57,16 +66,12 @@ async def edit_user(
 async def delete_user(    
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID,
-    current_user: dict = Depends(get_current_user)
+    # current_user: dict = Depends(get_current_user)
 ):
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
+    user = get_user_by_id(db=db, user_id=user_id)
 
     if not user:
-        raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="User not found"
-                )
+        raise HTTPNotFound("User not found")
     
     stmt = delete(User).where(User.id == user_id)
     await db.execute(stmt)

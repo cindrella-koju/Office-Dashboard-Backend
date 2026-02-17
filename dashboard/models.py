@@ -164,7 +164,6 @@ class Role(Mixins, Base):
     can_create_events: Mapped[bool] = mapped_column(Boolean, default=False)
     can_delete_events: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    can_manage_events: Mapped[bool] = mapped_column(Boolean, default=False)
     
     userrole: Mapped[list["UserRole"]] = relationship(
         back_populates="role",
