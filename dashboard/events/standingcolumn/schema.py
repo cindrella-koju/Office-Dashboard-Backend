@@ -4,6 +4,7 @@ from uuid import UUID
 class CreateColumn(BaseModel):
     stage_id : UUID
     column_field : str
+    default_value : str
 
 class ColumnResponse(CreateColumn):
     id : UUID
