@@ -141,6 +141,7 @@ async def get_overall_score(db: Annotated[AsyncSession,Depends(get_db_session)],
     stmt = (
         select(
             Match.match_name,
+            Match.created_at,
             func.json_agg(
                 func.json_build_object(
                     "username", User.username,
@@ -154,7 +155,8 @@ async def get_overall_score(db: Annotated[AsyncSession,Depends(get_db_session)],
         .join(TiesheetPlayer, Tiesheetplayermatchscore.tiesheetplayer)
         .join(User, User.id == TiesheetPlayer.user_id)
         .where(Match.tiesheet_id == tiesheet_id)
-        .group_by(Match.match_name)
+        .group_by(Match.match_name, Match.created_at)
+        .order_by(Match.created_at)
     )
 
     result = await db.execute(stmt)
@@ -184,19 +186,33 @@ async def get_match_detail(
         .subquery()
     )
 
-    match_subq = (
+    # First select matches with their details and created_at for ordering
+    match_detail_subq = (
         select(
             Match.tiesheet_id,
+            Match.id.label("match_id"),
+            Match.match_name,
+            Match.created_at,
+            match_user_subq.c.userDetail
+        )
+        .join(match_user_subq, match_user_subq.c.match_id == Match.id)
+        .order_by(Match.created_at)
+        .subquery()
+    )
+
+    # Then aggregate with preserved order
+    match_subq = (
+        select(
+            match_detail_subq.c.tiesheet_id,
             func.json_agg(
                 func.json_build_object(
-                    "match_id" , Match.id,
-                    "match_name", Match.match_name,
-                    "userDetail", match_user_subq.c.userDetail
+                    "match_id", match_detail_subq.c.match_id,
+                    "match_name", match_detail_subq.c.match_name,
+                    "userDetail", match_detail_subq.c.userDetail
                 )
             ).label("matchDetail")
         )
-        .join(match_user_subq, match_user_subq.c.match_id == Match.id)
-        .group_by(Match.tiesheet_id)
+        .group_by(match_detail_subq.c.tiesheet_id)
         .subquery()
     )
 
