@@ -15,15 +15,17 @@ class Participants(BaseModel):
 class ParticipantsEventResponse(BaseModel):
     user_id : UUID
     event_id : UUID
-    is_winner : bool
     username : str
+
+    model_config = ConfigDict(from_attributes=True)
 
 class ParticipantsUserResponse(BaseModel):
     user_id : UUID
     event_id : UUID
-    is_winner : bool
     username : str
     title : str
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RoundInfo(BaseModel):
@@ -45,3 +47,7 @@ class CreateGroupResponse(BaseModel):
     participants : List[UserResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserParticipantOrNot(BaseModel):
+    id : UUID
+    username : str

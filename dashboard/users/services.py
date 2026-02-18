@@ -1,4 +1,4 @@
-from models import User, UserRole
+from models import User, UserRole, Event, Role
 from fastapi import HTTPException, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pwdlib import PasswordHash
@@ -13,6 +13,7 @@ from roles.crud import get_user_role
 from users.crud import get_user_by_email_or_username, get_user_with_roles_by_username, get_user_by_id
 from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPConflict, HTTPNotFound, HTTPInternalServer, HTTPUnauthorized
+from sqlalchemy import select,func
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -246,3 +247,34 @@ async def refresh_access_token_service(db: AsyncSession, refresh_token: str):
     new_refresh_token = await generate_refresh_token(user_id=user.id)
     
     return new_access_token, new_refresh_token
+
+async def home_page_services(db: AsyncSession, user_id : UUID):
+    try:
+        # Get counts
+        total_users = await db.scalar(select(func.count(User.id)))
+        total_events = await db.scalar(select(func.count(Event.id)))
+        active_events = await db.scalar(
+            select(func.count(Event.id)).where(Event.status == "active")
+        )
+
+        # Get username and role
+        stmt = (
+            select(User.username, Role.rolename)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(User.id == user_id)
+        )
+
+        result = await db.execute(stmt)
+        user_data = result.first()
+
+        return {
+            "username": user_data.username if user_data else None,
+            "role": user_data.rolename if user_data else None,
+            "total_users": total_users,
+            "total_events": total_events,
+            "active_events": active_events,
+        }
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPInternalServer("An database error occur:",str(e))

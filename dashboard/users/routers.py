@@ -4,9 +4,9 @@ from models import User
 from db_connect import get_db_session
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select,delete
+from sqlalchemy import delete
 from uuid import UUID
-from users.services import login_user_service, signup_user_services, edit_user_services, refresh_access_token_service
+from users.services import login_user_service, signup_user_services, edit_user_services, refresh_access_token_service, home_page_services
 from users.crud import get_user_by_role, get_user_by_id
 from dependencies import get_current_user
 from exception import HTTPNotFound
@@ -62,7 +62,6 @@ async def refresh_token(
 async def retrieve_user(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     role_id : str | None = None,
-    current_user: dict = Depends(get_current_user),
 ):  
     users = await get_user_by_role(db=db, role_id=role_id)
     if not users:
@@ -77,17 +76,15 @@ async def edit_user(
     edit_detail : EditUserDetail,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID,
-    current_user: dict = Depends(get_current_user)
 ):
     return await edit_user_services(db=db, user_data=edit_detail, user_id=user_id)
 
-@router.delete("/user/{user_id}", dependencies=[Depends(get_current_user)])
+@router.delete("/{user_id}", dependencies=[Depends(get_current_user)])
 async def delete_user(    
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID,
-    # current_user: dict = Depends(get_current_user)
 ):
-    user = get_user_by_id(db=db, user_id=user_id)
+    user = await get_user_by_id(db=db, user_id=user_id)
 
     if not user:
         raise HTTPNotFound("User not found")
@@ -97,3 +94,12 @@ async def delete_user(
     await db.commit()
 
     return {"message": f"User {user.username} deleted successfully"}
+
+@router.get("/home")
+async def home_page(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = UUID(current_user["sub"])
+
+    return await home_page_services(db=db, user_id=user_id)

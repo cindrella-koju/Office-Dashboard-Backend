@@ -2,38 +2,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import UUID
 from events.stage.crud import extract_stage_by_id
 from events.group.service import GroupServices
-from models import GroupMembers, Group, Stage, User, Qualifier, user_event_association
-from sqlalchemy import select, and_
-from fastapi import HTTPException, status
+from models import GroupMembers, Group, Stage, User, Qualifier, user_event_association, StandingColumn, ColumnValues, UserRole, Event
+from sqlalchemy import select, and_, insert, delete
 from events.crud import extract_event_by_id
-from exception import HTTPNotFound
+from participants.crud import validate_participants
+from exception import HTTPNotFound, HTTPInternalServer
+from participants.schema import Participants, ParticipantsEventResponse, ParticipantsUserResponse, ParticipantsNotInGroup
+from roles.services import get_member_role_id
+from sqlalchemy.exc import SQLAlchemyError
 
-class ParticipantsServices:
-    @staticmethod
-    async def validate_participants(
-        db:AsyncSession,
-        user_id: UUID,
-        event_id : UUID
-    ):
-        result = await db.execute(
-            select(user_event_association)
-            .where(
-                and_(
-                    user_event_association.c.user_id == user_id,
-                    user_event_association.c.event_id == event_id
-                )
-            ))
-        participants = result.scalar_one_or_none()
-
-        if not participants:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Round not found"
-            )
-        
+class ParticipantsServices:        
     @staticmethod
     async def extract_participants_username(db=AsyncSession, event_id = UUID, user_id = UUID):
-        await ParticipantsServices.validate_participants(db=db, event_id=event_id, user_id=user_id)
+        await validate_participants(db=db, event_id=event_id, user_id=user_id)
 
         stmt = (
             select(User.username)
@@ -104,4 +85,166 @@ class ParticipantsServices:
         # Remove duplicates
         participants = list({p["id"]: p for p in participants}.values())
 
-        return participants
+        return [ParticipantsNotInGroup.model_validate(p) for p in participants]
+    
+    @staticmethod
+    async def create_participants( db:AsyncSession, event_id : UUID, participants : Participants):
+        try:
+            # 1. Insert into user_event_association (bulk)
+            association_rows = [
+                {
+                    "user_id": p,
+                    "event_id": event_id,
+                }
+                for p in participants.user_id
+            ]
+
+            await db.execute(
+                insert(user_event_association),
+                association_rows
+            )
+
+            # 2. Get stage_id for round 1
+            result = await db.execute(
+                select(Stage.id).where(
+                    Stage.event_id == event_id,
+                )
+            )
+            stage_id = result.scalar_one_or_none()
+
+            if not stage_id:
+                raise HTTPNotFound("Stage round 1 not found for this event")
+
+            # 3. Get standing columns + default values
+            result = await db.execute(
+                select(
+                    StandingColumn.id,
+                    StandingColumn.default_value
+                ).where(StandingColumn.stage_id == stage_id)
+            )
+            cols_and_vals = result.all()
+
+            # 4. Create ColumnValues for each user & column
+            new_col_vals = [
+                ColumnValues(
+                    user_id=p,
+                    column_id=col_id,
+                    value=default_value
+                )
+                for p in participants.user_id
+                for col_id, default_value in cols_and_vals
+            ]
+
+            # 5. Create Round 1 qualifiers
+            new_qualifiers = [
+                Qualifier(
+                    event_id=event_id,
+                    stage_id=stage_id,
+                    user_id=p
+                )
+                for p in participants.user_id
+            ]
+
+            db.add_all(new_col_vals)
+            db.add_all(new_qualifiers)
+
+            role_id = await get_member_role_id(db=db)
+            userrole = [
+                UserRole(
+                    user_id = p,
+                    event_id = event_id,
+                    role_id = role_id
+                )
+                for p in participants.user_id
+            ]
+            db.add_all(userrole)
+            await db.commit()
+
+            return {"message": "Participants added successfully"}
+
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise HTTPInternalServer(f"Failed to add participants: {str(e)}")
+
+    @staticmethod
+    async def extract_participant_by_event(db:AsyncSession, event_id : UUID):
+        try:
+            stmt = (
+                select(
+                    user_event_association.c.user_id,
+                    user_event_association.c.event_id,
+                    User.username,
+                )
+                .join(User, User.id == user_event_association.c.user_id)
+                .where(user_event_association.c.event_id == event_id)
+            )
+
+            result = await db.execute(stmt)
+            participants = result.mappings().all()
+
+            return [ParticipantsEventResponse.model_validate(p) for p in participants]
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise HTTPInternalServer(f"Failed to extract participants by event: {str(e)}")
+        
+    @staticmethod
+    async def extract_participant_by_event_with_user(db : AsyncSession, user_id : UUID):
+        try:
+            stmt = (
+                select(
+                    user_event_association.c.user_id,
+                    user_event_association.c.event_id,
+                    User.username,
+                    Event.title
+                )
+                .join(User, User.id == user_event_association.c.user_id)
+                .join(Event, Event.id == user_event_association.c.event_id)
+                .where(user_event_association.c.event_id == user_id)
+            )
+
+            result = await db.execute(stmt)
+            participants = result.mappings().all()
+
+            return [ParticipantsUserResponse.model_validate(p) for p in participants]
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise HTTPInternalServer(f"Failed to extract participants by event with user: {str(e)}")
+        
+    @staticmethod
+    async def delete_participants(db : AsyncSession, user_id : UUID, event_id : UUID):
+        username = await ParticipantsServices.extract_participants_username(db = db, user_id=user_id, event_id=event_id)
+        try:
+            # Delete Participants
+            stmt = delete(user_event_association).where(
+                and_(
+                    user_event_association.c.user_id == user_id,
+                    user_event_association.c.event_id == event_id
+                )
+            )
+
+            # Delete Qualifier
+            stmt2 = delete(Qualifier).where(
+                and_(
+                    Qualifier.event_id == event_id,
+                    Qualifier.user_id == user_id
+                )
+            )
+
+            # Delete the role of User 
+            stmt3 = delete(UserRole).where(
+                and_(
+                    UserRole.event_id == event_id,
+                    UserRole.user_id == user_id
+                )
+            )
+            await db.execute(stmt)
+            await db.execute(stmt2)
+            await db.execute(stmt3)
+            await db.commit()
+
+            return{
+                "message" : f"Participants {username} deleted successfully"
+            }
+        except SQLAlchemyError as e:
+            await db.rollback()
+            raise HTTPInternalServer(f"An error occured:{str(e)}")

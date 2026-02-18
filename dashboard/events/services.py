@@ -15,8 +15,6 @@ async def extract_all_event(db: AsyncSession, status: str | None = None):
     result = await db.execute(stmt)
     events = result.scalars().all()
 
-    if not events:
-        raise HTTPNotFound("Event not found")
     return [EventDetailResponse.model_validate(event) for event in events]
 
 
@@ -27,7 +25,6 @@ async def create_event(db: AsyncSession, event):
         startdate=event.startdate,
         enddate=event.enddate,
         status=StatusEnum(event.status),
-        progress_note=event.progress_note or "",
     )
 
     db.add(new_event)
@@ -105,8 +102,6 @@ async def edit_event_services( db: AsyncSession, event_id : UUID, event_detail :
     if event_detail.status:
         event.status = StatusEnum(event_detail.status)
 
-    if event_detail.progress_note:
-        event.progress_note = event_detail.progress_note
 
     await db.commit()
 

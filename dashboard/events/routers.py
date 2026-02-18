@@ -71,3 +71,11 @@ async def delete_event(
     return {
         "message" : f"Event {event.title} deleted successfully"
     }
+
+@router.get("/recent")
+async def extract_recent_five_event(db : Annotated[AsyncSession,Depends(get_db_session)] ):
+    stmt = select(Event).order_by(Event.created_at.desc()).limit(5)
+    result = await db.execute(stmt)
+    events = result.scalars().all()
+
+    return [EventDetail.model_validate(e) for e in events]

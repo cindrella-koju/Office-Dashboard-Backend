@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import date
 from enum import Enum
 from uuid import UUID
@@ -16,21 +16,19 @@ class EventDetail(BaseModel):
     startdate : date
     enddate : date
     status : StatusEnum
-    progress_note : str | None = None
 
+    model_config = ConfigDict(from_attributes=True)
+    
 class EditEventDetail(BaseModel):
     title : str | None = None
     description : str | None = None
     startdate : date | None = None
     enddate : date | None = None
     status :Optional[StatusEnum] = None
-    progress_note : str | None = None
 
 class EventDetailResponse(EventDetail):
     id : UUID
     created_at : datetime
     updated_at : datetime
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = ConfigDict(from_attributes=True)

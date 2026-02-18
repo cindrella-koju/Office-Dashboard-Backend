@@ -8,7 +8,6 @@ security = HTTPBearer()
 async def get_current_user(credential: HTTPAuthorizationCredentials = Depends(security)):
     if not credential:
         raise HTTPUnauthorized("Authorization header missing")
-    print("Credentials:", credential)
     try:
         decoded_token = await verify_jwt_token(credential)
     except HTTPException as e:

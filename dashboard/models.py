@@ -112,7 +112,6 @@ class Event(Mixins, Base):
     startdate: Mapped[date] = mapped_column(Date, nullable=False)
     enddate: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
-    progress_note: Mapped[str] = mapped_column(String(255))
 
     # Many to many relationship
     users: Mapped[list["User"]] = relationship(
@@ -428,8 +427,6 @@ class TiesheetPlayer(Mixins,Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
     )
-
-    is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
 
     tiesheet: Mapped["Tiesheet"] = relationship(back_populates="players")
     user: Mapped["User"] = relationship(back_populates="tiesheetplayer")
