@@ -14,8 +14,6 @@ async def extract_participants(event_id: UUID, db: AsyncSession):
     result = await db.execute(stmt)
     users = result.scalars().all()
 
-    if not stmt:
-        raise HTTPNotFound("Participant of this event not found")
     return [UserResponse.model_validate(user) for user in users]
 
 async def validate_participants(

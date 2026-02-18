@@ -4,7 +4,7 @@ from sqlalchemy import select, and_
 
 from models import User, Stage, StandingColumn, Qualifier, ColumnValues
 from events.overalltiesheet.schema import Round
-
+import json
 
 class OverallTiesheetServices:
 
@@ -81,5 +81,12 @@ class OverallTiesheetServices:
         for round_data in rounds_dict.values():
             round_data["users"] = list(round_data["users"].values())
             formatted_rounds.append(Round.model_validate(round_data))
-
+        
+        for user in formatted_rounds:
+            print("\n\n\n\nUsers",user.users)
+        # for round_ in formatted_rounds:
+        #     round_["users"].sort(
+        #         key=lambda u: int(next(c["column_value"] for c in u["column_detail"] if c["column_name"] == "Points")),
+        #         reverse=True
+        #     )
         return formatted_rounds

@@ -51,3 +51,5 @@ class CreateGroupResponse(BaseModel):
 class UserParticipantOrNot(BaseModel):
     id : UUID
     username : str
+
+    model_config = ConfigDict(from_attributes=True)

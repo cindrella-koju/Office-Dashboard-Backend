@@ -428,6 +428,8 @@ class TiesheetPlayer(Mixins,Base):
         ForeignKey("users.id", ondelete="CASCADE"),
     )
 
+    is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
+
     tiesheet: Mapped["Tiesheet"] = relationship(back_populates="players")
     user: Mapped["User"] = relationship(back_populates="tiesheetplayer")
     matchscore : Mapped[list["Tiesheetplayermatchscore"]] = relationship(back_populates="tiesheetplayer", cascade="save-update, delete, delete-orphan")

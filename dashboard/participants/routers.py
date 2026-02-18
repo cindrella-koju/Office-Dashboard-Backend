@@ -52,6 +52,7 @@ async def retrieve_not_participants(event_id : UUID,  db: Annotated[AsyncSession
     stmt = select(User.id,User.username).where(User.id.notin_(participant_ids))
     result = await db.execute(stmt)  
     users = result.all()
+    
     return [ UserParticipantOrNot.model_validate(user) for user in users]
 
 @router.get("/not_qualifier")

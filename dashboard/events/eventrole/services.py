@@ -36,9 +36,6 @@ class EventRoleServices:
             )
             result = await db.execute(stmt)
             event_role = result.mappings().all()
-
-            if not event_role:
-                raise HTTPNotFound("Event Role not found")
             
             return [EventRoleResponse.model_validate(er) for er in event_role]
         except SQLAlchemyError as e:
