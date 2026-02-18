@@ -193,3 +193,56 @@ async def edit_user_services(db: AsyncSession, user_data, user_id: UUID):
 
     await db.commit()
     return {"message": "User updated successfully"}
+
+
+async def verify_refresh_token(refresh_token: str):
+    """
+    Verify the refresh token and return the payload
+    """
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        if payload.get("type") != "refresh":
+            raise HTTPUnauthorized("Invalid token type")
+        
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPUnauthorized("Refresh token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPUnauthorized("Invalid refresh token")
+
+
+async def refresh_access_token_service(db: AsyncSession, refresh_token: str):
+    """
+    Verify refresh token and generate new access and refresh tokens
+    """
+    # Verify the refresh token
+    payload = await verify_refresh_token(refresh_token)
+    
+    user_id = UUID(payload.get("sub"))
+    
+    # Get user with roles to generate new token
+    from users.crud import get_user_with_roles_by_id
+    user = await get_user_with_roles_by_id(db, user_id)
+    
+    if not user:
+        raise HTTPUnauthorized("User not found")
+    
+    if not user.userrole:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User has no assigned role"
+        )
+    
+    role = user.userrole[0].role
+    
+    # Generate new tokens
+    new_access_token = await generate_access_token(
+        user_id=user.id,
+        role=role.rolename,
+        role_id=role.id
+    )
+    
+    new_refresh_token = await generate_refresh_token(user_id=user.id)
+    
+    return new_access_token, new_refresh_token

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from users.routers import router as user_router
 from events.routers import router as event_router
 from participants.routers import router as participant_router
@@ -6,12 +6,13 @@ from roles.routers import router as roles_router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from exception import APIError
+from dependencies import get_current_user
 
 app = FastAPI()
 app.include_router(user_router,prefix="/user",tags=["Users"])
-app.include_router(event_router,prefix="/event",tags=["Events"])
-app.include_router(participant_router,prefix="/participant",tags=["Participants"])
-app.include_router(roles_router,prefix="/role", tags=["Roles"])
+app.include_router(event_router,prefix="/event",tags=["Events"],dependencies=[Depends(get_current_user)])
+app.include_router(participant_router,prefix="/participant",tags=["Participants"],dependencies=[Depends(get_current_user)])
+app.include_router(roles_router,prefix="/role", tags=["Roles"],dependencies=[Depends(get_current_user)])
 origins = [
     "http://localhost",
     "http://localhost:5173", 

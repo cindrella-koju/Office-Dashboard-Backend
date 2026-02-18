@@ -33,7 +33,6 @@ async def create_event(
     db : Annotated[AsyncSession,Depends(get_db_session)],
     # current_user: dict = Depends(get_current_user),
 ):
-    # if current_user["role"] == RoleEnum.superadmin and current_user["role"] == RoleEnum.admin
     return await create_event_services(db=db, event=event)
 
 @router.get("")
