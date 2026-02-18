@@ -30,6 +30,12 @@ async def get_roles_with_permissions(db: Annotated[AsyncSession, Depends(get_db_
     return [RoleResponse.model_validate(role) for role in roles]
     
 
+@router.get("/all")
+async def get_all_role(db: Annotated[AsyncSession, Depends(get_db_session)]):
+    stmt = select(Role.id, Role.rolename.label("name"))
+    result = await db.execute(stmt)
+    return result.mappings().all()
+
 @router.post("/event")
 async def create_user_role_in_event_with_permission(db: Annotated[AsyncSession, Depends(get_db_session)],user_role_detail : EventRole):
     new_user_role = UserRole(

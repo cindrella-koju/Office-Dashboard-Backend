@@ -39,7 +39,8 @@ async def seed():
                 column_config_page=True,
                 group_stage_standing_page=True,
                 todays_game_page=True,
-                role_page=True
+                role_page=True,
+                event_role_page = True
             )
             db.add(superadmin_roleaccesspage)
             await db.flush()
@@ -91,7 +92,8 @@ async def seed():
                 column_config_page=False,
                 group_stage_standing_page=True,
                 todays_game_page=True,
-                role_page=False
+                role_page=False,
+                event_role_page = False
             )
             db.add(member_roleaccesspage)
             await db.flush()

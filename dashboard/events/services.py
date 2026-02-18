@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from events.schema import StatusEnum, EditEventDetail, EventDetailResponse
 from sqlalchemy.exc import SQLAlchemyError
-from exception import HTTPNotFound
+from exception import HTTPNotFound, HTTPInternalServer
 from events.crud import extract_event_by_id
 
 async def extract_all_event(db: AsyncSession, status: str | None = None):
@@ -83,10 +83,7 @@ async def create_event_services(db: AsyncSession, event):
 
     except SQLAlchemyError as e:
         await db.rollback()
-        return {
-            "message": "Failed to add Event",
-            "error": str(e)
-        }
+        raise HTTPInternalServer("Failed to add Event")
 
 async def edit_event_services( db: AsyncSession, event_id : UUID, event_detail : EditEventDetail):
     event = await extract_event_by_id(db=db, event_id=event_id)

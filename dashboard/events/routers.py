@@ -1,10 +1,9 @@
-from events.schema import EventDetail, StatusEnum, EventDetailResponse, EditEventDetail
-from fastapi import APIRouter, Depends, status, HTTPException
+from events.schema import EventDetail, EditEventDetail
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
 from models import Event
-from dependencies import get_current_user
 from uuid import UUID
 from events.services import extract_all_event, create_event_services, edit_event_services
 from sqlalchemy import select, delete
@@ -17,6 +16,7 @@ from events.tiesheet.routers import router as tiesheet_router
 from events.qualifier.routers import router as qualifier_router
 from events.overalltiesheet.routers import router as overalltiesheet_router
 from events.match.routers import router as match_router
+from events.eventrole.routers import router as eventrole_router
 
 router = APIRouter()
 router.include_router(state_router,prefix="/stage",tags=["Stage"])
@@ -26,6 +26,7 @@ router.include_router(tiesheet_router, prefix="/tiesheet",tags=["Tiesheet"])
 router.include_router(qualifier_router, prefix="/qualifier",tags=["Qualifier"])
 router.include_router(overalltiesheet_router,prefix="/overalltiesheet",tags=["Overalltiesheet"])
 router.include_router(match_router,prefix="/match", tags=["Match"])
+router.include_router(eventrole_router,prefix="/role", tags=["Event Role"])
 
 @router.post("")
 async def create_event( 

@@ -38,7 +38,6 @@ async def create_participants(
         result = await db.execute(
             select(Stage.id).where(
                 Stage.event_id == event_id,
-                Stage.round_order == 1
             )
         )
         stage_id = result.scalar_one_or_none()

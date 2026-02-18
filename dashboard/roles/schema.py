@@ -15,6 +15,7 @@ class RolePageAccessResponse(BaseModel):
     column_config_page : bool
     group_stage_standing_page : bool
     todays_game_page : bool
+    event_role_page : bool
 
     model_config = ConfigDict(from_attributes=True)
     

@@ -230,6 +230,7 @@ class RoleAccessPage(Mixins, Base):
     column_config_page: Mapped[bool] = mapped_column(Boolean, default=False)
     group_stage_standing_page: Mapped[bool] = mapped_column(Boolean, default=False)
     todays_game_page: Mapped[bool] = mapped_column(Boolean, default=False)
+    event_role_page : Mapped[bool] = mapped_column(Boolean, default=False)
 
     # One-to-one relationship
     role: Mapped["Role"] = relationship(

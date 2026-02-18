@@ -52,7 +52,8 @@ async def create_role_services( db:AsyncSession, roledetail : CreateRoleDetail )
             column_config_page = roleaccess.column_config_page,
             group_stage_standing_page = roleaccess.group_stage_standing_page,
             todays_game_page = roleaccess.todays_game_page,
-            role_page = roleaccess.role_page
+            role_page = roleaccess.role_page,
+            event_role_page = roleaccess.event_role_page
         )
         db.add(new_access_page)
         await db.commit()
