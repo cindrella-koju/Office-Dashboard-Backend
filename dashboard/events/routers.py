@@ -1,11 +1,11 @@
 from events.schema import EventDetail, EditEventDetail
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
 from models import Event
 from uuid import UUID
-from events.services import extract_all_event, create_event_services, edit_event_services
+from events.services import extract_all_event, create_event_services, edit_event_services, extract_all_event_pagination
 from sqlalchemy import select, delete
 from events.crud import extract_event_by_id
 from exception import HTTPNotFound
@@ -32,16 +32,17 @@ router.include_router(eventrole_router,prefix="/role", tags=["Event Role"])
 async def create_event( 
     event : EventDetail, 
     db : Annotated[AsyncSession,Depends(get_db_session)],
-    # current_user: dict = Depends(get_current_user),
 ):
     return await create_event_services(db=db, event=event)
 
 @router.get("")
 async def retrieve_event(
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    status : str | None = None
+    status : str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
 ):
-    return await extract_all_event(db=db, status=status)
+    return await extract_all_event_pagination(db=db, status=status,page=page, limit = limit)
     
 @router.patch("")
 async def edit_event(

@@ -26,7 +26,7 @@ class EventRoleServices:
             raise HTTPInternalServer("Failed to create Event Role")
         
     @staticmethod
-    async def get_event_role(db:AsyncSession, event_id : UUID):
+    async def get_event_role(db:AsyncSession, event_id : UUID, role_id : UUID | None = None):
         try:
             stmt = (
                 select(UserRole.id,User.username,UserRole.user_id,Role.rolename, UserRole.role_id)
@@ -34,6 +34,8 @@ class EventRoleServices:
                 .join(Role, Role.id == UserRole.role_id)
                 .where(UserRole.event_id == event_id)
             )
+            if role_id:
+                stmt = stmt.where(UserRole.role_id == role_id)
             result = await db.execute(stmt)
             event_role = result.mappings().all()
             

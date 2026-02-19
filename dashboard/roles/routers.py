@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
 from typing import Annotated
-from roles.schema import RoleDetail, RoleResponse, EventRole,RoleDetail,RolePermissionEdit, CreateRoleDetail
+from roles.schema import RoleResponse, EventRole,RolePermissionEdit, CreateRoleDetail
 from models import Role, UserRole
 from sqlalchemy import select,delete
 from enums import PermissionDetailEnum
@@ -106,3 +106,9 @@ async def delete_role_and_permission(
     return {
         "message" : f"Role {role.rolename} deleted successfully"
     }
+
+@router.get("/event/{event_id}")
+async def extract_event_role(db: Annotated[AsyncSession, Depends(get_db_session)],event_id : UUID):
+    stmt = select(UserRole.role_id.label("id"),Role.rolename.label("name")).join(Role, Role.id == UserRole.role_id).where(UserRole.event_id == event_id).distinct()
+    result = await db.execute(stmt)
+    return result.mappings().all()

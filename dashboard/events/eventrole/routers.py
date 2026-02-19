@@ -13,8 +13,8 @@ async def create_event_role(db : Annotated[AsyncSession,Depends(get_db_session)]
     return await EventRoleServices.create_event_role(db=db, eventrole=eventrole, event_id=event_id)
 
 @router.get("/{event_id}")
-async def get_event_role(db: Annotated[AsyncSession,Depends(get_db_session)], event_id : UUID):
-    return await EventRoleServices.get_event_role(db=db, event_id = event_id)
+async def get_event_role(db: Annotated[AsyncSession,Depends(get_db_session)], event_id : UUID, role_id : UUID | None = None):
+    return await EventRoleServices.get_event_role(db=db, event_id = event_id, role_id = role_id)
 
 @router.put("/{event_role_id}")
 async def edit_event_role(db : Annotated[AsyncSession,Depends(get_db_session)], event_role_id : UUID, editeventrole : EditEventRole):

@@ -1,11 +1,37 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import Event, Stage, StandingColumn
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, func
 from events.schema import StatusEnum, EditEventDetail, EventDetailResponse
 from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPNotFound, HTTPInternalServer
 from events.crud import extract_event_by_id
+
+async def extract_all_event_pagination(db: AsyncSession, page : int, limit : int , status: str | None = None):
+    skip = (page - 1) * limit
+
+    stmt = select(Event).order_by(Event.created_at.desc())
+    if status and status.lower() != "all":
+        stmt = stmt.where(Event.status == status.lower())
+
+    # Apply pagination
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    events = result.scalars().all()
+
+    # Count total items
+    count_stmt = select(func.count()).select_from(Event)
+    if status and status.lower() != "all":
+        count_stmt = count_stmt.where(Event.status == status.lower())
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar()
+
+    return {
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit,
+        "items": [EventDetailResponse.model_validate(event) for event in events]
+    }
 
 async def extract_all_event(db: AsyncSession, status: str | None = None):
     stmt = select(Event).order_by(Event.created_at)
