@@ -4,8 +4,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from events.tiesheet.schema import StandingColumnResponse, UpdateTiesheet, TiesheetStatus, CreateTiesheet
 import datetime
-from exception import HTTPInternalServer, HTTPNotFound
-from events.tiesheet.crud import get_tiesheet
+from exception import HTTPInternalServer, HTTPNotFound, HTTPConflict
+from events.tiesheet.crud import get_tiesheet, check_tiesheet_exist
 from sqlalchemy.exc import SQLAlchemyError
 
 class TiesheetServices:
@@ -215,6 +215,11 @@ class TiesheetServices:
 
     @staticmethod
     async def create_tiesheet(db:AsyncSession, tiesheet_detail : CreateTiesheet):
+        tiesheet_exist = await check_tiesheet_exist(db=db, players=tiesheet_detail.players, stage_id=tiesheet_detail.stage_id)
+        print("tiesheet exist:", tiesheet_exist)
+        if tiesheet_exist:
+            raise HTTPConflict("Tiesheet already exists")
+        
         try:
             if tiesheet_detail.group_id != "":
                 new_tiesheet = Tiesheet(

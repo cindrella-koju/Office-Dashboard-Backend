@@ -1,4 +1,4 @@
-from fastapi import APIRouter,Depends
+from fastapi import APIRouter,Depends, Query
 from users.schema import UserDetail,UserDetailResponse, LoginUser, EditUserDetail, RefreshTokenRequest, TokenResponse
 from models import User
 from db_connect import get_db_session
@@ -62,14 +62,16 @@ async def refresh_token(
 async def retrieve_user(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     role_id : str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
 ):  
-    users = await get_user_by_role(db=db, role_id=role_id)
+    users = await get_user_by_role(db=db, role_id=role_id, page=page, limit = limit)
     if not users:
         return{
             "message" : "User not found"
         }
 
-    return [UserDetailResponse.model_validate(user) for user in users]
+    return users
 
 @router.patch("/{user_id}", dependencies=[Depends(get_current_user)])
 async def edit_user(    

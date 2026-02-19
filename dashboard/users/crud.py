@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from models import User, Role, UserRole
 from uuid import UUID
 from users.schema import UserDetailResponse
@@ -25,10 +25,11 @@ async def get_user_by_email_or_username(
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
-async def get_user_by_role(db: AsyncSession,role_id : UUID | None = None ):
+async def get_user_by_role(db: AsyncSession,page : int, limit : int,role_id : UUID | None = None):
     """"
         Extract user detail with role info
     """
+    skip = (page - 1) * limit
     stmt = (
         select(
             User.id.label("id"),
@@ -45,8 +46,21 @@ async def get_user_by_role(db: AsyncSession,role_id : UUID | None = None ):
 
     if role_id:
         stmt = stmt.where(UserRole.role_id == role_id)
+
+    stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
-    return result.mappings().all()
+    user = result.mappings().all()
+
+    count_stmt = select(func.count()).select_from(User)
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar()    
+
+    return {
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit,
+        "items": [UserDetailResponse.model_validate(u) for u in user]
+    }
 
 async def get_all_users(db : AsyncSession, role_id : str | None = None):
     """Extract all user detail"""
