@@ -104,26 +104,29 @@ class ParticipantsServices:
                 association_rows
             )
 
+            print("Working 1")
             # 2. Get stage_id for round 1
             result = await db.execute(
                 select(Stage.id).where(
                     Stage.event_id == event_id,
-                )
+                ).order_by(Stage.created_at)
             )
-            stage_id = result.scalar_one_or_none()
+            stage_id = result.scalars().all()
 
             if not stage_id:
                 raise HTTPNotFound("Stage round 1 not found for this event")
 
+            print("Working 2")
             # 3. Get standing columns + default values
             result = await db.execute(
                 select(
                     StandingColumn.id,
                     StandingColumn.default_value
-                ).where(StandingColumn.stage_id == stage_id)
+                ).where(StandingColumn.stage_id == stage_id[0])
             )
             cols_and_vals = result.all()
-
+            
+            print("Working 3")
             # 4. Create ColumnValues for each user & column
             new_col_vals = [
                 ColumnValues(
@@ -134,12 +137,13 @@ class ParticipantsServices:
                 for p in participants.user_id
                 for col_id, default_value in cols_and_vals
             ]
-
+            
+            print("Working 4")
             # 5. Create Round 1 qualifiers
             new_qualifiers = [
                 Qualifier(
                     event_id=event_id,
-                    stage_id=stage_id,
+                    stage_id=stage_id[0],
                     user_id=p
                 )
                 for p in participants.user_id

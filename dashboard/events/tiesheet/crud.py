@@ -41,11 +41,17 @@ async def check_tiesheet_exist(
     stmt = (
         select(TiesheetPlayer.tiesheet_id, Tiesheet.stage_id, func.count(TiesheetPlayer.user_id).label("user_count"))
         .join(Tiesheet)
-        .where(TiesheetPlayer.user_id.in_(players))
+        .where(
+            and_(
+                TiesheetPlayer.user_id.in_(players),
+                Tiesheet.stage_id == stage_id
+            )
+        )
         .group_by(TiesheetPlayer.tiesheet_id, Tiesheet.stage_id)
         .having(func.count(TiesheetPlayer.user_id) == len(players))
     )
     result = await db.execute(stmt)
     users = result.all()
 
+    print
     return users
