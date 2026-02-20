@@ -3,8 +3,8 @@ from uuid import UUID
 from events.eventrole.schema import createEventRole, EventRoleResponse, EditEventRole
 from models import UserRole, User, Role
 from sqlalchemy.exc import SQLAlchemyError
-from exception import HTTPInternalServer, HTTPNotFound
-from sqlalchemy import select, delete
+from exception import HTTPInternalServer
+from sqlalchemy import select, delete, func
 from events.eventrole.crud import extract_event_role_by_id
 
 class EventRoleServices:
@@ -26,21 +26,55 @@ class EventRoleServices:
             raise HTTPInternalServer("Failed to create Event Role")
         
     @staticmethod
-    async def get_event_role(db:AsyncSession, event_id : UUID, role_id : UUID | None = None):
+    async def get_event_role(
+        db: AsyncSession,
+        event_id: UUID,
+        page: int,
+        limit: int,
+        role_id: UUID | None = None
+    ):
         try:
-            stmt = (
-                select(UserRole.id,User.username,UserRole.user_id,Role.rolename, UserRole.role_id)
-                .join(User,User.id == UserRole.user_id)
+            skip = (page - 1) * limit
+
+            base_stmt = (
+                select(
+                    UserRole.id,
+                    User.username,
+                    UserRole.user_id,
+                    Role.rolename,
+                    UserRole.role_id
+                )
+                .join(User, User.id == UserRole.user_id)
                 .join(Role, Role.id == UserRole.role_id)
                 .where(UserRole.event_id == event_id)
             )
+
             if role_id:
-                stmt = stmt.where(UserRole.role_id == role_id)
+                base_stmt = base_stmt.where(UserRole.role_id == role_id)
+
+            count_stmt = select(func.count()).select_from(
+                base_stmt.subquery()
+            )
+
+            total_result = await db.execute(count_stmt)
+            total = total_result.scalar_one()
+
+            stmt = base_stmt.offset(skip).limit(limit)
+
             result = await db.execute(stmt)
-            event_role = result.mappings().all()
-            
-            return [EventRoleResponse.model_validate(er) for er in event_role]
-        except SQLAlchemyError as e:
+            event_roles = result.mappings().all()
+
+            return {
+                "page": page,
+                "limit": limit,
+                "total_pages" : (total + limit -1) // limit,
+                "data": [
+                    EventRoleResponse.model_validate(er)
+                    for er in event_roles
+                ]
+            }
+
+        except SQLAlchemyError:
             await db.rollback()
             raise HTTPInternalServer("Failed to fetch Event Role")
     
