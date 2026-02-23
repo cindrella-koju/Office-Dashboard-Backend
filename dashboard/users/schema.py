@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from enum import Enum
-from datetime import datetime
+from typing import List
 from uuid import UUID
 
 class RoleEnum(str,Enum):
@@ -42,3 +42,26 @@ class TokenResponse(BaseModel):
     access_token : str
     refresh_token : str
     token_type : str = "bearer"
+
+class EventHistory(BaseModel):
+    title: str
+    rolename: str | None  # role might be None if no role assigned
+
+class ProfileResponse(BaseModel):
+    id: UUID
+    username: str
+    fullname: str
+    email: str
+    roles: str
+    event_history: List[EventHistory]
+
+    model_config = ConfigDict(from_attributes=True)
+
+class EditProfile(BaseModel):
+    username : str
+    fullname : str
+    email : str
+
+class ChangePasswordDetail(BaseModel):
+    oldpassword : str
+    newpassword : str

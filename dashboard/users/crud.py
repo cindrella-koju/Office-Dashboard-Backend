@@ -25,6 +25,14 @@ async def get_user_by_email_or_username(
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
+async def get_user_by_user_id(
+    db : AsyncSession,
+    user_id : UUID
+):
+    stmt = select(User).where(User.id == user_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
 async def get_user_by_role(db: AsyncSession,page : int, limit : int,role_id : UUID | None = None):
     """"
         Extract user detail with role info
@@ -88,14 +96,6 @@ async def get_user_with_roles_by_username(
     result = await db.execute(stmt)
     return result.scalars().first()
 
-async def get_user_by_id(
-    db: AsyncSession,
-    user_id: UUID  
-):
-    """ Extract single user by user_id """
-    stmt = select(User).where(User.id == user_id)
-    result = await db.execute(stmt)
-    return result.scalars().first()
 
 
 async def get_user_with_roles_by_id(

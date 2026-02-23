@@ -1,4 +1,4 @@
-from models import User, UserRole, Event, Role
+from models import User, UserRole, Event, Role, user_event_association
 from fastapi import HTTPException, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pwdlib import PasswordHash
@@ -10,10 +10,11 @@ from datetime import datetime,timedelta
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from roles.services import get_member_role_id
 from roles.crud import get_user_role
-from users.crud import get_user_by_email_or_username, get_user_with_roles_by_username, get_user_by_id
+from users.crud import get_user_by_email_or_username, get_user_with_roles_by_username, get_user_by_user_id
 from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPConflict, HTTPNotFound, HTTPInternalServer, HTTPUnauthorized
-from sqlalchemy import select,func
+from sqlalchemy import select,func, and_
+from users.schema import EventHistory, ProfileResponse, EditProfile, ChangePasswordDetail
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -162,7 +163,7 @@ async def signup_user_services(db : AsyncSession, user_data):
     
 
 async def edit_user_services(db: AsyncSession, user_data, user_id: UUID):
-    user = await get_user_by_id( db=db , user_id=user_id)
+    user = await get_user_by_user_id( db=db , user_id=user_id)
     if not user:
         raise HTTPNotFound("User not found")
 
@@ -278,3 +279,134 @@ async def home_page_services(db: AsyncSession, user_id : UUID):
     except SQLAlchemyError as e:
         await db.rollback()
         raise HTTPInternalServer("An database error occur:",str(e))
+    
+async def event_history_services(db: AsyncSession, user_id: UUID):
+    try:
+        stmt = (
+            select(
+                Event.title,
+                Role.rolename
+            )
+            .join(user_event_association, Event.id == user_event_association.c.event_id)
+            .outerjoin(
+                UserRole,
+                and_(
+                    UserRole.event_id == user_event_association.c.event_id,
+                    UserRole.user_id == user_event_association.c.user_id
+                )
+            )
+            .outerjoin(Role, Role.id == UserRole.role_id)
+            .where(user_event_association.c.user_id == user_id)
+            .order_by(UserRole.created_at)
+        )
+
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        # Convert rows to EventHistory models
+        return [EventHistory.model_validate(dict(row._mapping)) for row in rows]
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error occurred: {str(e)}"
+        )
+
+async def profile_page_services(db: AsyncSession, user_id: UUID) -> ProfileResponse | None:
+    try:
+        stmt = (
+            select(
+                User.id,
+                User.username,
+                User.email,
+                User.fullname,
+                Role.rolename.label("role")
+            )
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                User.id == user_id,
+                UserRole.event_id.is_(None)
+            )
+        )
+
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        if not rows:
+            return None
+
+        first_row = rows[0]
+        roles = [row.role for row in rows]
+
+        event_history = await event_history_services(db=db, user_id=user_id)
+
+        return ProfileResponse(
+            id=first_row.id,
+            username=first_row.username,
+            fullname=first_row.fullname,
+            email=first_row.email,
+            roles=roles[0],
+            event_history=event_history
+        )
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPInternalServer(f"Database error occurred: {str(e)}")
+    
+async def edit_profile_services(
+    db : AsyncSession,
+    user_id : UUID,
+    user_detail :EditProfile
+):
+    try:
+        user = await get_user_by_user_id(db=db, user_id=user_id)
+
+        if not user:
+            raise HTTPNotFound("User not Found")
+        
+        if user_detail.username:
+            user.username = user_detail.username
+
+        if user_detail.fullname:
+            user.fullname = user_detail.fullname
+
+        if user_detail.email:
+            user.email = user_detail.email
+
+        await db.commit()
+        return {
+            "message" : "Profile Edited Successfully"
+        }
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPInternalServer(f"Database error occurred: {str(e)}")
+    
+async def change_password_services(db: AsyncSession, password_detail : ChangePasswordDetail, user_id : UUID):
+    try:
+        print("Api hit")
+        user =await get_user_by_user_id(db=db, user_id=user_id)
+        if not user:
+            raise HTTPNotFound("User not found")
+        
+        # verify password
+        is_valid = await verify_password(
+            password_detail.oldpassword,
+            user.password
+        )
+
+        if not is_valid:
+            raise HTTPUnauthorized("Wrong Old Password")
+        
+        if password_detail.newpassword:
+            user.password = await get_password_hash(password_detail.newpassword)
+
+        await db.commit()
+
+        return {
+            "message" : "Password Changed successfully"
+        }
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPInternalServer(f"Database error occurred: {str(e)}")

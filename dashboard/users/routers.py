@@ -1,13 +1,13 @@
 from fastapi import APIRouter,Depends, Query
-from users.schema import UserDetail,UserDetailResponse, LoginUser, EditUserDetail, RefreshTokenRequest, TokenResponse
+from users.schema import UserDetail, EditProfile, LoginUser, EditUserDetail, RefreshTokenRequest, TokenResponse, ChangePasswordDetail
 from models import User
 from db_connect import get_db_session
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
 from uuid import UUID
-from users.services import login_user_service, signup_user_services, edit_user_services, refresh_access_token_service, home_page_services
-from users.crud import get_user_by_role, get_user_by_id
+from users.services import login_user_service, signup_user_services, edit_user_services, refresh_access_token_service, home_page_services, profile_page_services, edit_profile_services, change_password_services
+from users.crud import get_user_by_role, get_user_by_user_id
 from dependencies import get_current_user
 from exception import HTTPNotFound
 
@@ -73,6 +73,16 @@ async def retrieve_user(
 
     return users
 
+@router.patch("/changepassword")
+async def change_password(
+    db : Annotated[AsyncSession, Depends(get_db_session)],
+    password_detail : ChangePasswordDetail,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = UUID(current_user["sub"])
+
+    return await change_password_services(db=db, password_detail=password_detail, user_id=user_id)
+
 @router.patch("/{user_id}", dependencies=[Depends(get_current_user)])
 async def edit_user(    
     edit_detail : EditUserDetail,
@@ -86,7 +96,7 @@ async def delete_user(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     user_id: UUID,
 ):
-    user = await get_user_by_id(db=db, user_id=user_id)
+    user = await get_user_by_user_id(db=db, user_id=user_id)
 
     if not user:
         raise HTTPNotFound("User not found")
@@ -105,3 +115,22 @@ async def home_page(
     user_id = UUID(current_user["sub"])
 
     return await home_page_services(db=db, user_id=user_id)
+
+@router.get("/profile")
+async def profile_page(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = UUID(current_user["sub"])
+
+    return await profile_page_services(db=db, user_id=user_id)
+
+@router.put("/profile")
+async def edit_profile(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_detail : EditProfile,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = UUID(current_user["sub"])
+
+    return await edit_profile_services(db=db, user_detail=user_detail, user_id=user_id)
