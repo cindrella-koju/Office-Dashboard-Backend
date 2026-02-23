@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from events.stage.schema import RoundInfo, StageDetail, EditStageDetail
-from models import Stage
+from models import Stage, Group
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 from sqlalchemy import select, delete
@@ -70,6 +70,22 @@ async def retrieve_round_with_standing_column(
         )
     )
 
+    result = await db.execute(stmt)
+    stages = result.scalars().all()
+
+    return [RoundInfo.model_validate(stage) for stage in stages]
+
+@router.get("/group/{event_id}")
+async def get_round_having_group_only(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    event_id: UUID
+):
+    stmt = (
+        select(Stage.id, Stage.name)
+        .join(Group, Group.stage_id == Stage.id)
+        .where(Stage.event_id == event_id)
+        .distinct()
+    )
     result = await db.execute(stmt)
     stages = result.scalars().all()
 
