@@ -109,11 +109,12 @@ async def extract_member_of_group(
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
     stmt = (
-        select(GroupMembers.user_id, User.username)
+        select(GroupMembers.user_id.label("id"), User.username)
         .join(User, User.id == GroupMembers.user_id)
         .where(GroupMembers.group_id == group_id)
     )
     result = await db.execute(stmt)
     group_member = result.mappings().all()
 
+    print(group_member)
     return [GroupMember.model_validate(gm) for gm in group_member]
