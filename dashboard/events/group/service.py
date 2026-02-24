@@ -29,7 +29,8 @@ class GroupServices:
     @staticmethod
     async def get_group_detail_in_event_services(
         db:AsyncSession,
-        event_id : UUID
+        event_id : UUID,
+        stage_id : UUID | None = None
     ):  
         event = await extract_event_by_id(db = db,event_id=event_id)
         if not event:
@@ -85,6 +86,8 @@ class GroupServices:
             )
         )
 
+        if stage_id:
+            query = query.where(Group.stage_id == stage_id)
 
         result = await db.execute(query)
         detail = result.mappings().all()

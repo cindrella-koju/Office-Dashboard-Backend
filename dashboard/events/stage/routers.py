@@ -87,6 +87,6 @@ async def get_round_having_group_only(
         .distinct()
     )
     result = await db.execute(stmt)
-    stages = result.scalars().all()
+    stages = result.mappings().all()
 
     return [RoundInfo.model_validate(stage) for stage in stages]

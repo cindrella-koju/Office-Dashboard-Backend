@@ -165,21 +165,25 @@ class TiesheetServices:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
-    @staticmethod
-    async def update_tiesheet(db: AsyncSession, tiesheet: Tiesheet, tiesheet_detail: UpdateTiesheet):
-        # Update main fields
-        tiesheet.scheduled_date = tiesheet_detail.scheduled_date
-        tiesheet.scheduled_time = tiesheet_detail.scheduled_time
-        tiesheet.status = TiesheetStatus(tiesheet_detail.status)
+    # @staticmethod
+    # async def update_tiesheet(db: AsyncSession, tiesheet_id: UUID, tiesheet_detail: UpdateTiesheet):
+    #     tiesheet = await get_tiesheet(db=db,tiesheet_id=tiesheet_id)
+    #     # Update main fields
+    #     print("Working 1")
+    #     tiesheet.scheduled_date = tiesheet_detail.scheduled_date
+    #     print("Working 2")
+    #     tiesheet.scheduled_time = tiesheet_detail.scheduled_time
+    #     print("Working 3")
+    #     tiesheet.status = TiesheetStatus(tiesheet_detail.status)
+    #     print("HEHHEHEHEHEH",tiesheet_detail.players)
+    #     # Update player columns if provided
+    #     # if tiesheet_detail.player_columns:
+    #     #     for player_data in tiesheet_detail.player_columns:
+    #     #         await TiesheetServices.update_tiesheet_player(db, tiesheet.id, player_data)
 
-        # Update player columns if provided
-        if tiesheet_detail.player_columns:
-            for player_data in tiesheet_detail.player_columns:
-                await TiesheetServices.update_tiesheet_player(db, tiesheet.id, player_data)
-
-        await db.commit()
-        await db.refresh(tiesheet)
-        return tiesheet
+    #     await db.commit()
+    #     await db.refresh(tiesheet)
+    #     return tiesheet
 
     @staticmethod
     async def update_tiesheet_player(db: AsyncSession, tiesheet_id: UUID, player_data):
@@ -385,42 +389,6 @@ class TiesheetServices:
             tiesheet.scheduled_date = tiesheet_detail.scheduled_date
             tiesheet.scheduled_time = tiesheet_detail.scheduled_time
             tiesheet.status = TiesheetStatus(tiesheet_detail.status)
-            
-            # Update player_columns if provided
-            if tiesheet_detail.player_columns:
-                for player_data in tiesheet_detail.player_columns:
-                    # Update is_winner status
-                    player_stmt = select(TiesheetPlayer).where(
-                        TiesheetPlayer.tiesheet_id == tiesheet_id,
-                        TiesheetPlayer.user_id == player_data.user_id
-                    )
-                    player_result = await db.execute(player_stmt)
-                    tiesheet_player = player_result.scalar_one_or_none()
-                    
-                    if tiesheet_player:
-                        tiesheet_player.is_winner = player_data.is_winner
-                    
-                    # Update column values
-                    for column_input in player_data.columns:
-                        # Check if column value exists
-                        cv_stmt = select(ColumnValues).where(
-                            ColumnValues.user_id == player_data.user_id,
-                            ColumnValues.column_id == column_input.column_id
-                        )
-                        cv_result = await db.execute(cv_stmt)
-                        column_value = cv_result.scalar_one_or_none()
-                        
-                        if column_value:
-                            # Update existing value
-                            column_value.value = column_input.value
-                        else:
-                            # Create new column value
-                            new_column_value = ColumnValues(
-                                user_id=player_data.user_id,
-                                column_id=column_input.column_id,
-                                value=column_input.value
-                            )
-                            db.add(new_column_value)
             
             await db.commit()
             await db.refresh(tiesheet)

@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from models import Qualifier, User, StandingColumn, ColumnValues, Stage
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from events.qualifier.crud import extract_qualifier_by_id
 from events.qualifier.schema import QualifierModel
 from sqlalchemy.exc import SQLAlchemyError
@@ -87,6 +87,7 @@ class QualifierService:
             .join(User, User.id == Qualifier.user_id)
             .join(Stage, Stage.id == Qualifier.stage_id)
             .where(Qualifier.event_id == event_id)
+            .order_by(desc(Stage.created_at))
         )
 
         result = await db.execute(stmt)

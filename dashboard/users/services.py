@@ -61,7 +61,7 @@ async def verify_jwt_token(credential: HTTPAuthorizationCredentials = Depends(se
     try:
         
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        print("Decoded JWT:", payload)
+        # print("Decoded JWT:", payload)
         return payload
 
     except jwt.ExpiredSignatureError:

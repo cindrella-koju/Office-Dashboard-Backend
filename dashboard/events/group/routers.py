@@ -30,8 +30,8 @@ async def extract_group_by_event(stage_id:UUID,db: Annotated[AsyncSession, Depen
     
 
 @router.get("/event/{event_id}")
-async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],event_id : UUID):
-    return await GroupServices.get_group_detail_in_event_services(db=db, event_id=event_id)
+async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],event_id : UUID, stage_id : UUID | None = None):
+    return await GroupServices.get_group_detail_in_event_services(db=db, event_id=event_id, stage_id = stage_id)
 
 
 @router.patch("/{group_id}")
