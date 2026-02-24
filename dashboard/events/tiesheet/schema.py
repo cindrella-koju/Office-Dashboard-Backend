@@ -27,6 +27,7 @@ class CreateTiesheet(BaseModel):
     scheduled_time: time
     status: TiesheetStatus
     players: List[UUID]
+    tbd_number : int
 
 
 class ColumnValueInput(BaseModel):
@@ -41,12 +42,15 @@ class PlayerColumnData(BaseModel):
 
 
 class UpdateTiesheet(BaseModel):
-    stage_id: UUID
-    players: List[UUID]
-    scheduled_date: date 
-    scheduled_time: time 
-    status: TiesheetStatus
-    player_columns: List[PlayerColumnData] | None = None
+    stage_id: UUID | None = None
+    scheduled_date: date | None = None
+    scheduled_time: time | None = None
+    status: TiesheetStatus | None = None
+    tbd_user_ids : List[TBDUserIds] | None = None
+
+class TBDUserIds(BaseModel):
+    tiesheetplayer_id : UUID
+    user_id : UUID
 
 class StandingColumnResponse(BaseModel):
     column_field : str

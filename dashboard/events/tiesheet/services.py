@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from events.tiesheet.schema import StandingColumnResponse, UpdateTiesheet, TiesheetStatus, CreateTiesheet
 import datetime
 from exception import HTTPInternalServer, HTTPNotFound, HTTPConflict
-from events.tiesheet.crud import get_tiesheet, check_tiesheet_exist
+from events.tiesheet.crud import get_tiesheet, check_tiesheet_exist, extract_tiesheet_player_by_tiesheetplayer_id
 from sqlalchemy.exc import SQLAlchemyError
 
 class TiesheetServices:
@@ -39,16 +39,19 @@ class TiesheetServices:
                 Group.name.label("group_name"),
                 TiesheetPlayer.user_id,
                 TiesheetPlayer.is_winner,
+                TiesheetPlayer.is_tbd,
+                TiesheetPlayer.id.label("tiesheetplayer_id"),
                 User.username,
             )
             .join(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
             .join(Stage, Stage.id == Tiesheet.stage_id)
             .join(Event, Event.id == Stage.event_id)
-            .join(User, User.id == TiesheetPlayer.user_id)
+            .outerjoin(User, User.id == TiesheetPlayer.user_id)
             .outerjoin(Group, Group.id == Tiesheet.group_id)
             .where(Event.id == event_id)
             .order_by(Tiesheet.created_at)
         )
+
 
         if stage_id:
             stmt = stmt.where(Tiesheet.stage_id == stage_id)
@@ -165,26 +168,6 @@ class TiesheetServices:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
-    # @staticmethod
-    # async def update_tiesheet(db: AsyncSession, tiesheet_id: UUID, tiesheet_detail: UpdateTiesheet):
-    #     tiesheet = await get_tiesheet(db=db,tiesheet_id=tiesheet_id)
-    #     # Update main fields
-    #     print("Working 1")
-    #     tiesheet.scheduled_date = tiesheet_detail.scheduled_date
-    #     print("Working 2")
-    #     tiesheet.scheduled_time = tiesheet_detail.scheduled_time
-    #     print("Working 3")
-    #     tiesheet.status = TiesheetStatus(tiesheet_detail.status)
-    #     print("HEHHEHEHEHEH",tiesheet_detail.players)
-    #     # Update player columns if provided
-    #     # if tiesheet_detail.player_columns:
-    #     #     for player_data in tiesheet_detail.player_columns:
-    #     #         await TiesheetServices.update_tiesheet_player(db, tiesheet.id, player_data)
-
-    #     await db.commit()
-    #     await db.refresh(tiesheet)
-    #     return tiesheet
-
     @staticmethod
     async def update_tiesheet_player(db: AsyncSession, tiesheet_id: UUID, player_data):
         # Update player winner status
@@ -220,7 +203,6 @@ class TiesheetServices:
     @staticmethod
     async def create_tiesheet(db:AsyncSession, tiesheet_detail : CreateTiesheet):
         tiesheet_exist = await check_tiesheet_exist(db=db, players=tiesheet_detail.players, stage_id=tiesheet_detail.stage_id)
-        print("tiesheet exist:", tiesheet_exist)
         if tiesheet_exist:
             raise HTTPConflict("Tiesheet already exists")
         
@@ -248,10 +230,20 @@ class TiesheetServices:
                 TiesheetPlayer(
                     tiesheet_id=new_tiesheet.id,
                     user_id=player,
+                    is_tbd = False
                 )
                 for player in tiesheet_detail.players
             ]
-
+            
+            if tiesheet_detail.tbd_number:
+                tiesheet_players_tbd = [
+                    TiesheetPlayer(
+                        tiesheet_id = new_tiesheet.id,
+                        is_tbd = True
+                    )
+                    for num in range(tiesheet_detail.tbd_number)
+                ]
+                db.add_all(tiesheet_players_tbd)
             db.add_all(tiesheet_players)
 
             await db.commit()
@@ -296,8 +288,10 @@ class TiesheetServices:
 
             # Build player entry
             player = {
+                "id" : row["tiesheetplayer_id"],
                 "user_id": uid,
                 "is_winner": row["is_winner"],
+                "is_tbd" : row["is_tbd"],
                 "username": row["username"],
             }
 
@@ -384,12 +378,30 @@ class TiesheetServices:
     async def update_tiesheet(db : AsyncSession, tiesheet_id : UUID, tiesheet_detail : UpdateTiesheet):
         try:
             # Get existing tiesheet
+            print("Tiesheet detail:", tiesheet_detail)
             tiesheet = await get_tiesheet(db=db, tiesheet_id=tiesheet_id)
             # Update tiesheet fields
             tiesheet.scheduled_date = tiesheet_detail.scheduled_date
             tiesheet.scheduled_time = tiesheet_detail.scheduled_time
             tiesheet.status = TiesheetStatus(tiesheet_detail.status)
             
+            # Update players in bulk
+            if tiesheet_detail.tbd_user_ids:
+                player_ids = [player.tiesheetplayer_id for player in tiesheet_detail.tbd_user_ids]
+
+                result = await db.execute(
+                    select(TiesheetPlayer).where(TiesheetPlayer.id.in_(player_ids))
+                )
+                tiesheet_players = {tp.id: tp for tp in result.scalars().all()}
+
+                for player in tiesheet_detail.tbd_user_ids:
+                    tp = tiesheet_players.get(player.tiesheetplayer_id)
+                    if tp:
+                        tp.user_id = player.user_id
+                        tp.is_tbd = False
+                    else:
+                        print(f"Warning: TiesheetPlayer {player.tiesheetplayer_id} not found")
+                        
             await db.commit()
             await db.refresh(tiesheet)
             

@@ -73,12 +73,10 @@ async def update_tiesheet(
     tiesheet_detail: UpdateTiesheet,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    print("This api hit")
-    result = await TiesheetServices.update_tiesheet(db=db, tiesheet_id=tiesheet_id, tiesheet_detail=tiesheet_detail)
-    print("Results:", result)
     """Update tiesheet including status, date/time, and player column values"""
-    return "HEHEHAHAHAHA"
-    
+
+    result = await TiesheetServices.update_tiesheet(db=db, tiesheet_id=tiesheet_id, tiesheet_detail=tiesheet_detail)
+    return result
     
 @router.delete("/{tiesheet_id}")
 async def delete_tiesheet(

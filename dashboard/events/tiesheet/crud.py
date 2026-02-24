@@ -17,6 +17,18 @@ async def extract_tiesheet_player_by_tiesheet_id(db : AsyncSession, tiesheet_id 
     
     return players
 
+async def extract_tiesheet_player_by_tiesheetplayer_id(db : AsyncSession, tiesheetplayer_id : UUID):
+    stmt = select(TiesheetPlayer).where(
+        TiesheetPlayer.id == tiesheetplayer_id
+    )
+    result = await db.execute(stmt)
+    players = result.one_or_none()
+
+    if not players:
+        raise HTTPNotFound("No players found for this tiesheet")
+    
+    return players
+
 async def get_tiesheet( db : AsyncSession, tiesheet_id : UUID):
     stmt = select(Tiesheet).where(Tiesheet.id == tiesheet_id)
     result = await db.execute(stmt)
