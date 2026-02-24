@@ -1,7 +1,6 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, case
-
+from sqlalchemy import select, func, case, cast, Integer
 from models import User, StandingColumn, ColumnValues
 
 
@@ -17,7 +16,7 @@ class OverallTiesheetServices:
     ):
         skip = (page - 1) * limit
 
-        # Get column field for stage
+        # Get column fields for stage
         column_stmt = select(StandingColumn.column_field)
 
         if stage_id is not None:
@@ -29,15 +28,18 @@ class OverallTiesheetServices:
         column_fields = result.scalars().all()
 
         pivot_columns = [ColumnValues.user_id, User.username]
-        points_label = None
+        points_expr = None  # store real SQL expression
 
-        # Pivot expression
+        # Build pivot columns
         for column in column_fields:
             label_name = column.lower()
 
             expr = func.max(
                 case(
-                    (StandingColumn.column_field == column, ColumnValues.value),
+                    (
+                        StandingColumn.column_field == column,
+                        cast(ColumnValues.value, Integer)
+                    ),
                     else_=None
                 )
             ).label(label_name)
@@ -45,7 +47,7 @@ class OverallTiesheetServices:
             pivot_columns.append(expr)
 
             if label_name == "points":
-                points_label = label_name
+                points_expr = expr  
 
         base_query = (
             select(*pivot_columns)
@@ -59,6 +61,7 @@ class OverallTiesheetServices:
                 StandingColumn.stage_id == stage_id
             )
 
+        # Count query
         count_query = (
             select(func.count(func.distinct(ColumnValues.user_id)))
             .join(StandingColumn, ColumnValues.column_id == StandingColumn.id)
@@ -72,25 +75,24 @@ class OverallTiesheetServices:
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        # Ordering
-        if points_label:
-            base_query = base_query.order_by(
-                func.max(
-                    case(
-                        (StandingColumn.column_field == "points", ColumnValues.value),
-                        else_=None
-                    )
-                ).desc()
-            )
+        # ✅ Correct ordering by points DESC
+        if points_expr is not None:
+            base_query = base_query.order_by(None)  # clear old order
+            base_query = base_query.order_by(points_expr.desc())
+
         final_query = base_query.offset(skip).limit(limit)
+
+        print("Final Query:", final_query)
 
         result = await db.execute(final_query)
         users_col_value = result.mappings().all()
 
+        print("User column value:", users_col_value)
+
         return {
             "page": page,
             "limit": limit,
-            "total_pages": (total + limit - 1) // limit if limit else 1,
+            "total_pages": (total + limit - 1) // limit, 
             "total_items": total,
             "items": users_col_value,
         }
