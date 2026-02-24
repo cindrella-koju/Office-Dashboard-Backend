@@ -27,7 +27,7 @@ class CreateTiesheet(BaseModel):
     scheduled_time: time
     status: TiesheetStatus
     players: List[UUID]
-    tbd_number : int
+    tbd_number : int | None = None
 
 
 class ColumnValueInput(BaseModel):

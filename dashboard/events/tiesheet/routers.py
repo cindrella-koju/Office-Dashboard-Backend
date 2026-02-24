@@ -7,7 +7,7 @@ from uuid import UUID
 from db_connect import get_db_session
 from events.tiesheet.schema import CreateTiesheet, CreateTiesheetPlayers, EditTiesheetPlayers, TiesheetStatus, UpdateTiesheet
 from events.tiesheet.services import TiesheetServices
-from events.tiesheet.crud import get_tiesheet
+from events.tiesheet.crud import get_tiesheet, extract_tiesheet_player_by_tiesheetplayer_id
 
 router = APIRouter()
 
@@ -91,4 +91,19 @@ async def delete_tiesheet(
 
     return{
         "message" : "Tiesheet deleted successfully"
+    }
+
+@router.delete("/player/{tiesheetplayer_id}")
+async def delete_tiesheet_player_tbd(
+    db: Annotated[AsyncSession,Depends(get_db_session)],
+    tiesheetplayer_id : UUID
+):
+    await extract_tiesheet_player_by_tiesheetplayer_id(db=db, tiesheetplayer_id=tiesheetplayer_id)
+
+    stmt = delete(TiesheetPlayer).where(TiesheetPlayer.id == tiesheetplayer_id)
+    await db.execute(stmt)
+    await db.commit()
+
+    return{
+        "message" : "Tiesheet player of TBD Deleted successfully"
     }

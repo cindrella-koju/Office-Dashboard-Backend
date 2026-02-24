@@ -226,25 +226,27 @@ class TiesheetServices:
             db.add(new_tiesheet)
             await db.flush()
 
-            tiesheet_players = [
-                TiesheetPlayer(
-                    tiesheet_id=new_tiesheet.id,
-                    user_id=player,
-                    is_tbd = False
-                )
-                for player in tiesheet_detail.players
-            ]
-            
-            if tiesheet_detail.tbd_number:
-                tiesheet_players_tbd = [
+            if tiesheet_detail.players:
+                tiesheet_players = [
                     TiesheetPlayer(
-                        tiesheet_id = new_tiesheet.id,
-                        is_tbd = True
+                        tiesheet_id=new_tiesheet.id,
+                        user_id=player,
+                        is_tbd = False
                     )
-                    for num in range(tiesheet_detail.tbd_number)
+                    for player in tiesheet_detail.players
                 ]
-                db.add_all(tiesheet_players_tbd)
-            db.add_all(tiesheet_players)
+            
+                if tiesheet_detail.tbd_number:
+                    tiesheet_players_tbd = [
+                        TiesheetPlayer(
+                            tiesheet_id = new_tiesheet.id,
+                            is_tbd = True
+                        )
+                        for num in range(tiesheet_detail.tbd_number)
+                    ]
+                    db.add_all(tiesheet_players_tbd)
+                    
+                db.add_all(tiesheet_players)
 
             await db.commit()
             await db.refresh(new_tiesheet)
@@ -401,7 +403,7 @@ class TiesheetServices:
                         tp.is_tbd = False
                     else:
                         print(f"Warning: TiesheetPlayer {player.tiesheetplayer_id} not found")
-                        
+
             await db.commit()
             await db.refresh(tiesheet)
             
