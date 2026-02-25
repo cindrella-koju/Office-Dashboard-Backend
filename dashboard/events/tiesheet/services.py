@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from events.tiesheet.schema import StandingColumnResponse, UpdateTiesheet, TiesheetStatus, CreateTiesheet
 import datetime
 from exception import HTTPInternalServer, HTTPNotFound, HTTPConflict
-from events.tiesheet.crud import get_tiesheet, check_tiesheet_exist, extract_tiesheet_player_by_tiesheetplayer_id
+from events.tiesheet.crud import get_tiesheet, check_tiesheet_exist, extract_tiesheet_player_by_tiesheet_id
 from sqlalchemy.exc import SQLAlchemyError
 
 class TiesheetServices:
@@ -202,7 +202,7 @@ class TiesheetServices:
 
     @staticmethod
     async def create_tiesheet(db:AsyncSession, tiesheet_detail : CreateTiesheet):
-        tiesheet_exist = await check_tiesheet_exist(db=db, players=tiesheet_detail.players, stage_id=tiesheet_detail.stage_id)
+        tiesheet_exist = await check_tiesheet_exist(db=db, players=tiesheet_detail.players, stage_id=tiesheet_detail.stage_id, tbd_number=tiesheet_detail.tbd_number)
         if tiesheet_exist:
             raise HTTPConflict("Tiesheet already exists")
         
@@ -383,7 +383,9 @@ class TiesheetServices:
             tiesheet.scheduled_date = tiesheet_detail.scheduled_date
             tiesheet.scheduled_time = tiesheet_detail.scheduled_time
             tiesheet.status = TiesheetStatus(tiesheet_detail.status)
-
+            
+            tiesheet_players_for_validations = await extract_tiesheet_player_by_tiesheet_id(db=db, tiesheet_id=tiesheet_id)
+            players = [tpv.user_id for tpv in tiesheet_players_for_validations]
             # Update TBD users
             if tiesheet_detail.tbd_user_ids:
                 player_ids = [p.tiesheetplayer_id for p in tiesheet_detail.tbd_user_ids if p.tiesheetplayer_id]
@@ -391,6 +393,10 @@ class TiesheetServices:
                     result = await db.execute(select(TiesheetPlayer).where(TiesheetPlayer.id.in_(player_ids)))
                     tiesheet_players = {tp.id: tp for tp in result.scalars().all()}
                     for player in tiesheet_detail.tbd_user_ids:
+                        players.append(player.user_id)
+                        tiesheet_exist = await check_tiesheet_exist(db=db, players=players, stage_id=tiesheet_detail.stage_id)
+                        if tiesheet_exist:
+                            raise HTTPConflict("Tiesheet already exists")
                         tp = tiesheet_players.get(player.tiesheetplayer_id)
                         if tp:
                             tp.user_id = player.user_id
