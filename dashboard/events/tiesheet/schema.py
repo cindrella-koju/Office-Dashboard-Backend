@@ -47,10 +47,16 @@ class UpdateTiesheet(BaseModel):
     scheduled_time: time | None = None
     status: TiesheetStatus | None = None
     tbd_user_ids : List[TBDUserIds] | None = None
+    edit_user_info : List[EditUserInfo] | None = None
+    tbd_number : int | None = None
 
 class TBDUserIds(BaseModel):
     tiesheetplayer_id : UUID
     user_id : UUID
+
+class EditUserInfo(BaseModel):
+    new_user_id : UUID
+    old_user_tiesheet_id : UUID
 
 class StandingColumnResponse(BaseModel):
     column_field : str

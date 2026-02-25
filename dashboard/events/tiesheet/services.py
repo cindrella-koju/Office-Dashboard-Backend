@@ -245,7 +245,7 @@ class TiesheetServices:
                         for num in range(tiesheet_detail.tbd_number)
                     ]
                     db.add_all(tiesheet_players_tbd)
-                    
+
                 db.add_all(tiesheet_players)
 
             await db.commit()
@@ -377,48 +377,49 @@ class TiesheetServices:
         return tiesheet_data
     
     @staticmethod
-    async def update_tiesheet(db : AsyncSession, tiesheet_id : UUID, tiesheet_detail : UpdateTiesheet):
+    async def update_tiesheet(db: AsyncSession, tiesheet_id: UUID, tiesheet_detail: UpdateTiesheet):
         try:
-            # Get existing tiesheet
-            print("Tiesheet detail:", tiesheet_detail)
             tiesheet = await get_tiesheet(db=db, tiesheet_id=tiesheet_id)
-            # Update tiesheet fields
             tiesheet.scheduled_date = tiesheet_detail.scheduled_date
             tiesheet.scheduled_time = tiesheet_detail.scheduled_time
             tiesheet.status = TiesheetStatus(tiesheet_detail.status)
-            
-            # Update players in bulk
+
+            # Update TBD users
             if tiesheet_detail.tbd_user_ids:
-                player_ids = [player.tiesheetplayer_id for player in tiesheet_detail.tbd_user_ids]
+                player_ids = [p.tiesheetplayer_id for p in tiesheet_detail.tbd_user_ids if p.tiesheetplayer_id]
+                if player_ids:
+                    result = await db.execute(select(TiesheetPlayer).where(TiesheetPlayer.id.in_(player_ids)))
+                    tiesheet_players = {tp.id: tp for tp in result.scalars().all()}
+                    for player in tiesheet_detail.tbd_user_ids:
+                        tp = tiesheet_players.get(player.tiesheetplayer_id)
+                        if tp:
+                            tp.user_id = player.user_id
+                            tp.is_tbd = False
+                        else:
+                            print(f"Warning: TiesheetPlayer {player.tiesheetplayer_id} not found")
 
-                result = await db.execute(
-                    select(TiesheetPlayer).where(TiesheetPlayer.id.in_(player_ids))
-                )
-                tiesheet_players = {tp.id: tp for tp in result.scalars().all()}
+            # Add new TBD players
+            if tiesheet_detail.tbd_number:
+                new_tbd = [TiesheetPlayer(tiesheet_id=tiesheet_id, is_tbd=True) for _ in range(tiesheet_detail.tbd_number)]
+                db.add_all(new_tbd)
 
-                for player in tiesheet_detail.tbd_user_ids:
-                    tp = tiesheet_players.get(player.tiesheetplayer_id)
-                    if tp:
-                        tp.user_id = player.user_id
-                        tp.is_tbd = False
-                    else:
-                        print(f"Warning: TiesheetPlayer {player.tiesheetplayer_id} not found")
+            # Edit existing user info
+            if tiesheet_detail.edit_user_info:
+                tie_ids = [p.old_user_tiesheet_id for p in tiesheet_detail.edit_user_info if p.old_user_tiesheet_id]
+                if tie_ids:
+                    result = await db.execute(select(TiesheetPlayer).where(TiesheetPlayer.id.in_(tie_ids)))
+                    tie_map = {tp.id: tp for tp in result.scalars().all()}
+                    for py in tiesheet_detail.edit_user_info:
+                        tp = tie_map.get(py.old_user_tiesheet_id)
+                        if tp:
+                            tp.user_id = py.new_user_id
+                        else:
+                            print(f"Warning: TiesheetPlayer {py.old_user_tiesheet_id} not found")
 
             await db.commit()
             await db.refresh(tiesheet)
-            
-            return {
-                "message": "Tiesheet updated successfully",
-                "id": tiesheet.id
-            }
-            
-        except SQLAlchemyError as e:
-            await db.rollback()
-            raise HTTPInternalServer(
-                f"Database error: {str(e)}"
-            )
+            return {"message": "Tiesheet updated successfully", "id": tiesheet.id}
+
         except Exception as e:
             await db.rollback()
-            raise HTTPInternalServer(
-                f"Failed to update tiesheet: {str(e)}"
-            )
+            raise HTTPInternalServer(f"Failed to update tiesheet: {str(e)}")
