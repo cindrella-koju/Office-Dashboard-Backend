@@ -379,13 +379,15 @@ class TiesheetServices:
     @staticmethod
     async def update_tiesheet(db: AsyncSession, tiesheet_id: UUID, tiesheet_detail: UpdateTiesheet):
         try:
+            print("Tiesheet stage_id:", tiesheet_detail.stage_id)
             tiesheet = await get_tiesheet(db=db, tiesheet_id=tiesheet_id)
             tiesheet.scheduled_date = tiesheet_detail.scheduled_date
             tiesheet.scheduled_time = tiesheet_detail.scheduled_time
             tiesheet.status = TiesheetStatus(tiesheet_detail.status)
             
             tiesheet_players_for_validations = await extract_tiesheet_player_by_tiesheet_id(db=db, tiesheet_id=tiesheet_id)
-            players = [tpv.user_id for tpv in tiesheet_players_for_validations]
+            players = [tpv.user_id for tpv in tiesheet_players_for_validations if tpv.user_id is not None]
+
             # Update TBD users
             if tiesheet_detail.tbd_user_ids:
                 player_ids = [p.tiesheetplayer_id for p in tiesheet_detail.tbd_user_ids if p.tiesheetplayer_id]
@@ -394,7 +396,15 @@ class TiesheetServices:
                     tiesheet_players = {tp.id: tp for tp in result.scalars().all()}
                     for player in tiesheet_detail.tbd_user_ids:
                         players.append(player.user_id)
-                        tiesheet_exist = await check_tiesheet_exist(db=db, players=players, stage_id=tiesheet_detail.stage_id)
+                        # Extract number of TBD
+                        tbd_number = len(tiesheet_players_for_validations) - len(players)
+                        # Validate if already exist or not
+                        tiesheet_exist = await check_tiesheet_exist(
+                            db=db, 
+                            players=players, 
+                            stage_id=tiesheet_detail.stage_id,
+                            tbd_number= tbd_number
+                        )
                         if tiesheet_exist:
                             raise HTTPConflict("Tiesheet already exists")
                         tp = tiesheet_players.get(player.tiesheetplayer_id)
@@ -411,16 +421,60 @@ class TiesheetServices:
 
             # Edit existing user info
             if tiesheet_detail.edit_user_info:
-                tie_ids = [p.old_user_tiesheet_id for p in tiesheet_detail.edit_user_info if p.old_user_tiesheet_id]
+                tie_ids = [UUID(p.old_user_tiesheet_id )for p in tiesheet_detail.edit_user_info if p.old_user_tiesheet_id if p.old_user_tiesheet_id != ""]
+                edit_user_id_key_val = [{p.old_user_id: p.new_user_id} for p in tiesheet_detail.edit_user_info if p.old_user_id != ""]
+                existing_player= [tp.user_id for tp in tiesheet_players_for_validations if tp.user_id != ""]
+                print("Tiesheet Id:", tie_ids)
+                print("Old Player:",existing_player)
+                edit_user_id = [p.new_user_id for p in tiesheet_detail.edit_user_info if p.new_user_id != ""]
+
+                if len(tiesheet_players_for_validations) != len(edit_user_id_key_val):
+                    for kv in edit_user_id_key_val:
+                        old_id_str, new_id_str = next(iter(kv.items()))
+                        
+                        old_id = UUID(str(old_id_str))
+                        new_id = UUID(str(new_id_str))
+                        
+                        print("Old ID:",old_id)
+                        print("New ID:", new_id)
+                        # Remove old ID if it exists
+                        if old_id in existing_player:
+                            existing_player.remove(old_id)
+                        
+                        # Add the new ID
+                        existing_player.append(new_id)
+                    edit_user_id = existing_player
+
+                print("Player id for validation:",edit_user_id)
+                # Validate if tiesheet already exist
+                tiesheet_exist = await check_tiesheet_exist(
+                    db=db, 
+                    players=edit_user_id, 
+                    stage_id=tiesheet_detail.stage_id,
+                    tbd_number= None
+                )
+                if tiesheet_exist:
+                    raise HTTPConflict("Tiesheet already exists")
+
                 if tie_ids:
                     result = await db.execute(select(TiesheetPlayer).where(TiesheetPlayer.id.in_(tie_ids)))
                     tie_map = {tp.id: tp for tp in result.scalars().all()}
                     for py in tiesheet_detail.edit_user_info:
-                        tp = tie_map.get(py.old_user_tiesheet_id)
-                        if tp:
-                            tp.user_id = py.new_user_id
-                        else:
-                            print(f"Warning: TiesheetPlayer {py.old_user_tiesheet_id} not found")
+                        raw_old_id = py.old_user_tiesheet_id
+                        if not raw_old_id:
+                            print("Warning: Empty old_user_tiesheet_id")
+                            continue
+                        try:
+                            old_id = UUID(str(raw_old_id))
+                        except (ValueError, TypeError):
+                            print(f"Invalid UUID format: {raw_old_id}")
+                            continue
+                        tp = tie_map.get(old_id)
+                        if not tp:
+                            print(f"Warning: TiesheetPlayer {old_id} not found")
+                            continue
+
+                        tp.user_id = py.new_user_id
 
             await db.commit()
             await db.refresh(tiesheet)

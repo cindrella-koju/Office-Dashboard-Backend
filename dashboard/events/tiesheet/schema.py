@@ -55,8 +55,9 @@ class TBDUserIds(BaseModel):
     user_id : UUID
 
 class EditUserInfo(BaseModel):
-    new_user_id : UUID
-    old_user_tiesheet_id : UUID
+    new_user_id : UUID | str
+    old_user_tiesheet_id : UUID | str
+    old_user_id : UUID | str
 
 class StandingColumnResponse(BaseModel):
     column_field : str
