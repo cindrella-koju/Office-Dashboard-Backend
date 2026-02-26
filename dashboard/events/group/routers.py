@@ -34,28 +34,21 @@ async def retrieve_group(db: Annotated[AsyncSession, Depends(get_db_session)],ev
     return await GroupServices.get_group_detail_in_event_services(db=db, event_id=event_id, stage_id = stage_id)
 
 
-@router.patch("/{group_id}")
+@router.patch("/{group_id}/stage/{stage_id}")
 async def update_group(
     group_id: UUID,
+    stage_id : UUID,
     group_update: GroupUpdate,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    return await GroupServices.update_group(db=db, group_update=group_update, group_id=group_id) 
+    return await GroupServices.update_group(db=db, group_update=group_update, group_id=group_id, stage_id=stage_id) 
     
 @router.delete("/{group_id}")
 async def delete_group(
     group_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    await extract_group_by_id(db=db, group_id=group_id)
-    
-    stmt = delete(Group).where(Group.id == group_id)
-    await db.execute(stmt)
-    await db.commit()
-
-    return {
-        "message" : f"Group deleted successfully"
-    }
+    return await GroupServices.delete_group(db=db, group_id=group_id)
     
 @router.post("/player")
 async def add_group_member(
@@ -83,13 +76,14 @@ async def update_group_table_data(
     return await GroupServices.update_group_table_data(db=db, table_update=table_update, group_id=group_id)
     
 
-@router.delete("/member/{user_id}/group/{group_id}")
+@router.delete("/member/{user_id}/group/{group_id}/stage/{stage_id}")
 async def delete_group_member(
     user_id: UUID,
     group_id: UUID,
+    stage_id : UUID,
     db: Annotated[AsyncSession, Depends(get_db_session)]
 ):
-    return await GroupServices.delete_group_member(db=db, user_id=user_id, group_id=group_id)
+    return await GroupServices.delete_group_member(db=db, user_id=user_id, group_id=group_id, stage_id = stage_id)
 
 
 @router.get("/byround")
@@ -118,3 +112,38 @@ async def extract_member_of_group(
 
     print(group_member)
     return [GroupMember.model_validate(gm) for gm in group_member]
+
+# # Fetch group with members
+#     stmt = select(Group).where(Group.id == group_id).options(selectinload(Group.members))
+#     result = await db.execute(stmt)
+#     group = result.scalar_one_or_none()
+
+#     # if not group:
+#     #     raise HTTPNo(status_code=404, detail="Group not found")
+
+#     stage_id = group.stage_id
+
+#     # Get all column IDs for this stage
+#     stmt = select(StandingColumn.id).where(StandingColumn.stage_id == stage_id)
+#     result = await db.execute(stmt)
+#     column_ids = result.scalars().all()
+
+#     # Get all user IDs in the group
+#     user_ids  = [u.user_id for u in group.members]
+
+#     # Delete ColumnValues related to this group
+#     if column_ids and user_ids:
+#         stmt = delete(ColumnValues).where(
+#             ColumnValues.column_id.in_(column_ids),
+#             ColumnValues.user_id.in_(user_ids)
+#         )
+#         await db.execute(stmt)
+
+#     # Delete the group
+#     stmt = delete(Group).where(Group.id == group_id)
+#     await db.execute(stmt)
+#     await db.commit()
+
+#     return {
+#         "message": "Group deleted successfully",
+#     }

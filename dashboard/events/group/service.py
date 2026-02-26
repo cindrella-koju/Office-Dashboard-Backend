@@ -9,7 +9,7 @@ from events.group.schema import GroupDetail, GroupUpdate, GroupTableUpdate
 from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPNotFound, HTTPInternalServer
 from events.group.crud import extract_group_by_id
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 class GroupServices:
     @staticmethod
@@ -152,7 +152,17 @@ class GroupServices:
                 for user_id in group.participants_ids
             ]
             db.add_all(members)
+            
+            stmt = select(StandingColumn.id.label("id"), StandingColumn.default_value.label("value")).where(StandingColumn.stage_id == group.round_id)
+            result = await db.execute(stmt)
+            columns = result.mappings().all()
 
+            column_values = [
+                ColumnValues(user_id=user_id, column_id=col['id'], value=col['value'])
+                for user_id in group.participants_ids
+                for col in columns
+            ]
+            db.add_all(column_values)
             await db.commit()
 
             return {
@@ -161,34 +171,48 @@ class GroupServices:
         except SQLAlchemyError as e:
             await db.rollback()
             raise HTTPInternalServer("Failed to create group")
-        
+    
     @staticmethod
-    async def update_group(db:AsyncSession, group_update:GroupUpdate, group_id : UUID):
+    async def update_group(db: AsyncSession, group_update: GroupUpdate, group_id: UUID, stage_id: UUID):
         try:
             group = await extract_group_by_id(db=db, group_id=group_id)
+            if not group:
+                raise HTTPInternalServer(f"Group with id {group_id} not found")
 
-            if group_update.name is not None:
+            # Update name if provided
+            if group_update.name:
                 group.name = group_update.name
 
             # Update participants if provided
             if group_update.participants_ids is not None:
-                # Delete existing members
-                await db.execute(delete(GroupMembers).where(GroupMembers.group_id == group_id))
-                
+                result = await db.execute(select(GroupMembers.user_id).where(GroupMembers.group_id == group_id))
+                group_member = result.scalars().all()
+                add_members = list(set(group_update.participants_ids) - set(group_member))
                 # Add new members
-                new_members = [
-                    GroupMembers(group_id=group_id, user_id=user_id)
-                    for user_id in group_update.participants_ids
-                ]
+                new_members = [GroupMembers(group_id=group_id, user_id=user_id) 
+                               for user_id in add_members]
                 db.add_all(new_members)
 
-                await db.commit()
-                return {
-                    "message": f"Group {group.name} successfully",
-                }
+                # Prepare column values
+                stmt = select(StandingColumn.id.label("id"), StandingColumn.default_value.label("value")) \
+                       .where(StandingColumn.stage_id == stage_id)
+                result = await db.execute(stmt)
+                columns = result.mappings().all()
+
+                if columns:
+                    column_values = [
+                        ColumnValues(user_id=user_id, column_id=col['id'], value=col['value'])
+                        for user_id in add_members
+                        for col in columns
+                    ]
+                    db.add_all(column_values)
+
+            await db.commit()
+            return {"message": f"Group '{group.name}' updated successfully"}
+
         except SQLAlchemyError as e:
             await db.rollback()
-            raise HTTPInternalServer("Failed to update group") 
+            raise HTTPInternalServer(f"Failed to update group: {e}") from e 
         
     @staticmethod
     async def update_group_table_data( db : AsyncSession, group_id : UUID, table_update : GroupTableUpdate ):
@@ -221,10 +245,10 @@ class GroupServices:
             }
         except SQLAlchemyError as e:
             await db.rollback()
-            raise HTTPInternalServer("Failed to update group table data")
+            raise HTTPInternalServer(f"Failed to update group table data {e}")
         
     @staticmethod
-    async def delete_group_member( db: AsyncSession, group_id :UUID, user_id : UUID):
+    async def delete_group_member( db: AsyncSession, group_id :UUID, user_id : UUID, stage_id : UUID):
         stmt = (
             select(GroupMembers, User.username, Group.name)
             .join(User, GroupMembers.user_id == User.id)
@@ -248,7 +272,54 @@ class GroupServices:
                 GroupMembers.group_id == group_id
             )
         )
+        stmt = select(StandingColumn.id).where(StandingColumn.stage_id == stage_id)
+        result = await db.execute(stmt)
+        column_ids = result.scalars().all()
+        
+        if column_ids:
+            stmt = delete(ColumnValues).where(
+                ColumnValues.column_id.in_(column_ids),
+                ColumnValues.user_id == user_id
+            )
+            await db.execute(stmt)
         await db.commit()
         return {
             "message": f"Member {username} removed from group {group_name} successfully"
         }
+    
+    @staticmethod
+    async def delete_group( db : AsyncSession,group_id : UUID):
+        try:
+            stmt = select(Group).where(Group.id == group_id).options(selectinload(Group.members))
+            result = await db.execute(stmt)
+            group = result.scalar_one_or_none()
+
+            if not group:
+                raise HTTPNotFound("Group not found")
+            
+            stmt = delete(Group).where(Group.id == group_id)
+            await db.execute(stmt)
+
+            stage_id = group.stage_id
+
+            stmt = select(StandingColumn.id).where(StandingColumn.stage_id == stage_id)
+            result = await db.execute(stmt)
+            column_ids = result.scalars().all()
+
+            user_ids  = [u.user_id for u in group.members]
+
+            # Delete ColumnValues related to this group
+            if column_ids and user_ids:
+                stmt = delete(ColumnValues).where(
+                    ColumnValues.column_id.in_(column_ids),
+                    ColumnValues.user_id.in_(user_ids)
+                )
+                await db.execute(stmt)
+
+            await db.commit()
+
+            return {
+                "message" : f"Group deleted successfully"
+            }
+        except SQLAlchemyError as e:
+            raise HTTPInternalServer("Database error occur:", e)

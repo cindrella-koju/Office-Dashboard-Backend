@@ -11,6 +11,7 @@ class StatusEnum(str,Enum):
     completed = "completed"
 
 class EventDetail(BaseModel):
+    id : UUID
     title : str
     description : str | None = None
     startdate : date
