@@ -26,45 +26,6 @@ class TiesheetServices:
 
         return [StandingColumnResponse(**cv) for cv in column_and_column_val]
 
-    @staticmethod
-    async def get_tiesheet_with_player(event_id : UUID, db : AsyncSession, stage_id : UUID | None = None, today :bool | None = None):
-        stmt = (
-            select(
-                Tiesheet.id,
-                Tiesheet.scheduled_date,
-                Tiesheet.scheduled_time,
-                Tiesheet.status,
-                Stage.name.label("stage_name"),
-                Stage.id.label("stage_id"),
-                Group.name.label("group_name"),
-                TiesheetPlayer.user_id,
-                TiesheetPlayer.is_winner,
-                TiesheetPlayer.is_tbd,
-                TiesheetPlayer.id.label("tiesheetplayer_id"),
-                User.username,
-            )
-            .join(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
-            .join(Stage, Stage.id == Tiesheet.stage_id)
-            .join(Event, Event.id == Stage.event_id)
-            .outerjoin(User, User.id == TiesheetPlayer.user_id)
-            .outerjoin(Group, Group.id == Tiesheet.group_id)
-            .where(Event.id == event_id)
-            .order_by(Tiesheet.created_at)
-        )
-
-
-        if stage_id:
-            stmt = stmt.where(Tiesheet.stage_id == stage_id)
-
-        if today:
-            today_date = datetime.date.today()
-            stmt = stmt.where(Tiesheet.scheduled_date == today_date)
-
-
-        result = await db.execute(stmt)
-        rows = result.mappings().all()
-
-        return rows
 
     @staticmethod
     async def get_tiesheet_by_id(db:AsyncSession, tiesheet_id : UUID, round_id : UUID | None = None):
@@ -261,45 +222,49 @@ class TiesheetServices:
         
     @staticmethod
     async def retrieve_tiesheet(db:AsyncSession, event_id : UUID, stage_id : UUID | None = None, today : bool | None = None):
-        rows = await TiesheetServices.get_tiesheet_with_player(event_id=event_id, db=db, today=today)
+        stmt = (
+            select(
+                Tiesheet.id,
+                Tiesheet.scheduled_date,
+                Tiesheet.scheduled_time,
+                Tiesheet.stage_id,
+                Stage.name.label("stage_name"),
+                Tiesheet.status,
+                func.json_agg(
+                    func.json_build_object(
+                        "id", TiesheetPlayer.id,
+                        "user_id", TiesheetPlayer.user_id,
+                        "is_winner", TiesheetPlayer.is_winner,
+                        "is_tbd", TiesheetPlayer.is_tbd,
+                        "username", User.username
+                    )
+                ).label("player_info")
+            )
+            .join(Stage, Stage.id == Tiesheet.stage_id)
+            .join(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
+            .join(User, User.id == TiesheetPlayer.user_id)
+            .where(Stage.event_id == event_id)
+            .group_by(
+                Tiesheet.id,
+                Tiesheet.scheduled_date,
+                Tiesheet.scheduled_time,
+                Tiesheet.stage_id,
+                Stage.name,
+                Tiesheet.status,
+                Stage.created_at
+            )
+            .order_by(Stage.created_at)
+        )
+
         if stage_id:
-            rows = await TiesheetServices.get_tiesheet_with_player(event_id=event_id, stage_id=stage_id, db=db, today=today)
+            stmt = stmt.where(Stage.id == stage_id)
 
-        tiesheets: dict[UUID, dict] = {}
+        if today:
+            today_date = datetime.date.today()
+            stmt = stmt.where(Tiesheet.scheduled_date == today_date)
 
-        for row in rows:
-            tid = row["id"]
-            sid = row["stage_id"]
-            uid = row["user_id"]
-
-            if tid not in tiesheets:
-                tiesheet = {
-                    "id": tid,
-                    "scheduled_date": row["scheduled_date"],
-                    "scheduled_time": row["scheduled_time"],
-                    "stage_id": sid,
-                    "stage_name": row["stage_name"],
-                    "status": row["status"],
-                    "player_info": [],
-                }
-
-                if row.get("group_name"):
-                    tiesheet["group_name"] = row["group_name"]
-
-                tiesheets[tid] = tiesheet
-
-            # Build player entry
-            player = {
-                "id" : row["tiesheetplayer_id"],
-                "user_id": uid,
-                "is_winner": row["is_winner"],
-                "is_tbd" : row["is_tbd"],
-                "username": row["username"],
-            }
-
-            tiesheets[tid]["player_info"].append(player)
-
-        return list(tiesheets.values())
+        result = await db.execute(stmt)
+        return result.mappings().all()
     
     @staticmethod
     async def get_tiesheet_with_player_info_column_values(
