@@ -1,4 +1,4 @@
-from events.schema import EventDetail, EditEventDetail
+from events.schema import EventDetail, EditEventDetail, CreateEvent
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_connect import get_db_session
@@ -30,7 +30,7 @@ router.include_router(eventrole_router,prefix="/role", tags=["Event Role"])
 
 @router.post("")
 async def create_event( 
-    event : EventDetail, 
+    event : CreateEvent, 
     db : Annotated[AsyncSession,Depends(get_db_session)],
 ):
     return await create_event_services(db=db, event=event)

@@ -73,10 +73,10 @@ async def create_default_round(db: AsyncSession, new_event: Event):
 
 async def create_default_standing_col(db: AsyncSession, new_round: Stage):
     default_standing_col = [
-        {"column_field": "Match Played", "default_value": "0"},
         {"column_field": "Win", "default_value": "0"},
         {"column_field": "Loss", "default_value": "0"},
         {"column_field": "Draw", "default_value": "0"},
+        {"column_field": "Match Played", "default_value": "0"},
         {"column_field": "Points", "default_value": "0"},
     ]
 

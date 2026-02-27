@@ -36,10 +36,12 @@ class GroupServices:
         stage_id : UUID | None = None
     ):  
         try:
-            event = await extract_event_by_id(db = db,event_id=event_id)
+             # Extract the event to ensure it exists
+            event = await extract_event_by_id(db=db, event_id=event_id)
             if not event:
-                HTTPNotFound("Event not found")
-            
+                raise HTTPException(status_code=404, detail="Event not found")
+
+            # Columns per user per stage
             columns_subq = (
                 select(
                     StandingColumn.stage_id.label("stage_id"),
@@ -53,37 +55,63 @@ class GroupServices:
                                 "created_at", StandingColumn.created_at
                             ),
                             StandingColumn.created_at.asc(),
-                            StandingColumn.id.asc()
+                            StandingColumn.id.asc()  # tie-breaker if created_at is same
                         )
-                    ).label("columns"),
+                    ).label("columns")
                 )
                 .join(ColumnValues, ColumnValues.column_id == StandingColumn.id)
                 .group_by(StandingColumn.stage_id, ColumnValues.user_id)
             ).subquery()
 
+            # Total points per user per stage
+            user_points_subq = (
+                select(
+                    ColumnValues.user_id.label("user_id"),
+                    StandingColumn.stage_id.label("stage_id"),
+                    func.sum(
+                        case(
+                            (func.lower(StandingColumn.column_field) == "points",
+                             cast(ColumnValues.value, Integer)),
+                            else_=0
+                        )
+                    ).label("total_points")
+                )
+                .join(StandingColumn, StandingColumn.id == ColumnValues.column_id)
+                .group_by(ColumnValues.user_id, StandingColumn.stage_id)
+            ).subquery()
+
+            # Groups with members, ordering members by total_points DESC
             groups_subq = (
                 select(
                     Group.id.label("group_id"),
                     Group.name.label("group_name"),
                     Group.stage_id.label("stage_id"),
-                        func.json_agg(
+                    func.json_agg(
+                        aggregate_order_by(
                             func.json_build_object(
                                 "user_id", GroupMembers.user_id,
                                 "username", User.username,
                                 "columns", columns_subq.c.columns
-                            )
-                        ).filter(GroupMembers.user_id.is_not(None)).label("members"),
+                            ),
+                            user_points_subq.c.total_points.desc(),
+                            User.username.asc()  # optional tie-breaker
+                        )
+                    ).filter(GroupMembers.user_id.is_not(None)).label("members")
                 )
                 .outerjoin(GroupMembers, GroupMembers.group_id == Group.id)
                 .outerjoin(User, User.id == GroupMembers.user_id)
-                .outerjoin(
-                    columns_subq,
-                    (columns_subq.c.user_id == GroupMembers.user_id)
-                    & (columns_subq.c.stage_id == Group.stage_id)
+                .outerjoin(columns_subq,
+                           (columns_subq.c.user_id == GroupMembers.user_id)
+                           & (columns_subq.c.stage_id == Group.stage_id)
+                )
+                .outerjoin(user_points_subq,
+                           (user_points_subq.c.user_id == GroupMembers.user_id)
+                           & (user_points_subq.c.stage_id == Group.stage_id)
                 )
                 .group_by(Group.id, Group.name, Group.stage_id)
             ).subquery()
 
+            # Stages with groups
             stmt = (
                 select(
                     Stage.id.label("stage_id"),
@@ -92,19 +120,21 @@ class GroupServices:
                         func.json_build_object(
                             "group_id", groups_subq.c.group_id,
                             "group_name", groups_subq.c.group_name,
-                            "members", groups_subq.c.members,
+                            "members", groups_subq.c.members
                         )
                     ).label("groups")
                 )
-                .join(groups_subq, groups_subq.c.stage_id == Stage.id)  # INNER JOIN
+                .join(groups_subq, groups_subq.c.stage_id == Stage.id)
                 .group_by(Stage.id, Stage.name)
-                .where(Stage.id == stage_id)
+                .where(Stage.id == stage_id)  # optional filter
             )
 
             result = await db.execute(stmt)
             detail = result.mappings().all()
-
             return detail
+
+        except SQLAlchemyError as e:
+            raise HTTPException(status_code=500, detail=f"Database error occurred: {e}")
         except SQLAlchemyError as e:
             raise HTTPInternalServer(f"Database error occured:{e}")
         

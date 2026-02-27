@@ -10,6 +10,15 @@ class StatusEnum(str,Enum):
     active = "active"
     completed = "completed"
 
+class CreateEvent(BaseModel):
+    title : str
+    description : str | None = None
+    startdate : date
+    enddate : date
+    status : StatusEnum
+
+    model_config = ConfigDict(from_attributes=True)
+
 class EventDetail(BaseModel):
     id : UUID
     title : str
