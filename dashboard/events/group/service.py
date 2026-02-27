@@ -1,8 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession 
 from uuid import UUID
-from models import Group, Stage, User, ColumnValues, GroupMembers, StandingColumn
+from models import Group, Stage, User, ColumnValues, GroupMembers, StandingColumn, User
 from fastapi import HTTPException, status
-from sqlalchemy import select, and_, delete
+from sqlalchemy import select, and_, delete, func, case, cast, Integer
 from events.crud import extract_event_by_id
 from exception import HTTPNotFound
 from events.group.schema import GroupDetail, GroupUpdate, GroupTableUpdate
@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPNotFound, HTTPInternalServer
 from events.group.crud import extract_group_by_id
 from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy import JSON
 
 class GroupServices:
     @staticmethod
@@ -35,64 +36,76 @@ class GroupServices:
         event = await extract_event_by_id(db = db,event_id=event_id)
         if not event:
             HTTPNotFound("Event not found")
-
+        
         columns_subq = (
             select(
-                StandingColumn.id.label("column_id"),
                 StandingColumn.stage_id.label("stage_id"),
-                StandingColumn.column_field.label("column_name"),
-                StandingColumn.created_at.label("column_created_at")
+                ColumnValues.user_id.label("user_id"),
+                func.coalesce(
+                    func.json_agg(
+                        func.json_build_object(
+                            "column_id", StandingColumn.id,
+                            "column_field", StandingColumn.column_field,
+                            "value", ColumnValues.value,
+                        )
+                    ).filter(StandingColumn.id.is_not(None)),
+                    func.cast("[]", JSON)
+                ).label("columns")
             )
-            .order_by(StandingColumn.created_at, StandingColumn.id)  # Ensure stable order
+            .join(ColumnValues, ColumnValues.column_id == StandingColumn.id)
+            .group_by(StandingColumn.stage_id, ColumnValues.user_id)
         ).subquery()
 
-        ColumnsAlias = aliased(StandingColumn, columns_subq)
-        query = (
+        groups_subq = (
+            select(
+                Group.id.label("group_id"),
+                Group.name.label("group_name"),
+                Group.stage_id.label("stage_id"),
+                func.coalesce(
+                    func.json_agg(
+                        func.json_build_object(
+                            "user_id", GroupMembers.user_id,
+                            "username", User.username,
+                            "columns", func.coalesce(columns_subq.c.columns, func.cast("[]", JSON))
+                        )
+                    ).filter(GroupMembers.user_id.is_not(None)),
+                    func.cast("[]", JSON)
+                ).label("members")
+            )
+            .outerjoin(GroupMembers, GroupMembers.group_id == Group.id)
+            .outerjoin(User, User.id == GroupMembers.user_id)
+            .outerjoin(
+                columns_subq,
+                (columns_subq.c.user_id == GroupMembers.user_id)
+                & (columns_subq.c.stage_id == Group.stage_id)
+            )
+            .group_by(Group.id, Group.name, Group.stage_id)
+        ).subquery()
+
+        stmt = (
             select(
                 Stage.id.label("stage_id"),
                 Stage.name.label("stage_name"),
-                User.username.label("username"),
-                GroupMembers.user_id,
-                Group.id.label("group_id"),
-                Group.name.label("group_name"),
-                columns_subq.c.column_name,
-                columns_subq.c.column_id,
-                ColumnValues.value.label("column_value")
+                func.json_agg(
+                    func.json_build_object(
+                        "group_id", groups_subq.c.group_id,
+                        "group_name", groups_subq.c.group_name,
+                        "members", groups_subq.c.members,
+                    )
+                ).label("groups")
             )
-            .join(Group, Group.id == GroupMembers.group_id)
-            .join(Stage, Stage.id == Group.stage_id)
-            # Join the ordered columns subquery
-            .join(columns_subq, columns_subq.c.stage_id == Stage.id)
-            # Join ColumnValues matching user and column
-            .join(
-                ColumnValues,
-                and_(
-                    ColumnValues.column_id == columns_subq.c.column_id,
-                    ColumnValues.user_id == GroupMembers.user_id
-                )
-            )
-            .join(User, User.id == GroupMembers.user_id)
-            .where(
-                and_(
-                    Group.event_id == event_id,
-                    Stage.event_id == event_id
-                )
-            )
-            # Order by user first, then column created_at (already enforced in subquery)
-            .order_by(
-                User.created_at,
-                columns_subq.c.column_created_at,
-                columns_subq.c.column_id  # tiebreaker for stable order
-            )
+            .join(groups_subq, groups_subq.c.stage_id == Stage.id)  # INNER JOIN
+            .group_by(Stage.id, Stage.name)
         )
 
-        if stage_id:
-            query = query.where(Group.stage_id == stage_id)
-
-        result = await db.execute(query)
+        result = await db.execute(stmt)
         detail = result.mappings().all()
 
-        return await GroupServices.format_group_data(detail)
+        return detail
+        # result = await db.execute(query)
+        # detail = result.mappings().all()
+
+        # return await GroupServices.format_group_data(detail)
     
 
     @staticmethod
