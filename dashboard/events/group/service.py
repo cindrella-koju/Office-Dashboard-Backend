@@ -10,7 +10,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPNotFound, HTTPInternalServer
 from events.group.crud import extract_group_by_id
 from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import JSON
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 
 class GroupServices:
     @staticmethod
@@ -33,120 +35,79 @@ class GroupServices:
         event_id : UUID,
         stage_id : UUID | None = None
     ):  
-        event = await extract_event_by_id(db = db,event_id=event_id)
-        if not event:
-            HTTPNotFound("Event not found")
+        try:
+            event = await extract_event_by_id(db = db,event_id=event_id)
+            if not event:
+                HTTPNotFound("Event not found")
+            
+            columns_subq = (
+                select(
+                    StandingColumn.stage_id.label("stage_id"),
+                    ColumnValues.user_id.label("user_id"),
+                    func.json_agg(
+                        aggregate_order_by(
+                            func.json_build_object(
+                                "column_id", StandingColumn.id,
+                                "column_field", StandingColumn.column_field,
+                                "value", ColumnValues.value,
+                                "created_at", StandingColumn.created_at
+                            ),
+                            StandingColumn.created_at.asc(),
+                            StandingColumn.id.asc()
+                        )
+                    ).label("columns"),
+                )
+                .join(ColumnValues, ColumnValues.column_id == StandingColumn.id)
+                .group_by(StandingColumn.stage_id, ColumnValues.user_id)
+            ).subquery()
+
+            groups_subq = (
+                select(
+                    Group.id.label("group_id"),
+                    Group.name.label("group_name"),
+                    Group.stage_id.label("stage_id"),
+                        func.json_agg(
+                            func.json_build_object(
+                                "user_id", GroupMembers.user_id,
+                                "username", User.username,
+                                "columns", columns_subq.c.columns
+                            )
+                        ).filter(GroupMembers.user_id.is_not(None)).label("members"),
+                )
+                .outerjoin(GroupMembers, GroupMembers.group_id == Group.id)
+                .outerjoin(User, User.id == GroupMembers.user_id)
+                .outerjoin(
+                    columns_subq,
+                    (columns_subq.c.user_id == GroupMembers.user_id)
+                    & (columns_subq.c.stage_id == Group.stage_id)
+                )
+                .group_by(Group.id, Group.name, Group.stage_id)
+            ).subquery()
+
+            stmt = (
+                select(
+                    Stage.id.label("stage_id"),
+                    Stage.name.label("stage_name"),
+                    func.json_agg(
+                        func.json_build_object(
+                            "group_id", groups_subq.c.group_id,
+                            "group_name", groups_subq.c.group_name,
+                            "members", groups_subq.c.members,
+                        )
+                    ).label("groups")
+                )
+                .join(groups_subq, groups_subq.c.stage_id == Stage.id)  # INNER JOIN
+                .group_by(Stage.id, Stage.name)
+                .where(Stage.id == stage_id)
+            )
+
+            result = await db.execute(stmt)
+            detail = result.mappings().all()
+
+            return detail
+        except SQLAlchemyError as e:
+            raise HTTPInternalServer(f"Database error occured:{e}")
         
-        columns_subq = (
-            select(
-                StandingColumn.stage_id.label("stage_id"),
-                ColumnValues.user_id.label("user_id"),
-                func.coalesce(
-                    func.json_agg(
-                        func.json_build_object(
-                            "column_id", StandingColumn.id,
-                            "column_field", StandingColumn.column_field,
-                            "value", ColumnValues.value,
-                        )
-                    ).filter(StandingColumn.id.is_not(None)),
-                    func.cast("[]", JSON)
-                ).label("columns")
-            )
-            .join(ColumnValues, ColumnValues.column_id == StandingColumn.id)
-            .group_by(StandingColumn.stage_id, ColumnValues.user_id)
-        ).subquery()
-
-        groups_subq = (
-            select(
-                Group.id.label("group_id"),
-                Group.name.label("group_name"),
-                Group.stage_id.label("stage_id"),
-                func.coalesce(
-                    func.json_agg(
-                        func.json_build_object(
-                            "user_id", GroupMembers.user_id,
-                            "username", User.username,
-                            "columns", func.coalesce(columns_subq.c.columns, func.cast("[]", JSON))
-                        )
-                    ).filter(GroupMembers.user_id.is_not(None)),
-                    func.cast("[]", JSON)
-                ).label("members")
-            )
-            .outerjoin(GroupMembers, GroupMembers.group_id == Group.id)
-            .outerjoin(User, User.id == GroupMembers.user_id)
-            .outerjoin(
-                columns_subq,
-                (columns_subq.c.user_id == GroupMembers.user_id)
-                & (columns_subq.c.stage_id == Group.stage_id)
-            )
-            .group_by(Group.id, Group.name, Group.stage_id)
-        ).subquery()
-
-        stmt = (
-            select(
-                Stage.id.label("stage_id"),
-                Stage.name.label("stage_name"),
-                func.json_agg(
-                    func.json_build_object(
-                        "group_id", groups_subq.c.group_id,
-                        "group_name", groups_subq.c.group_name,
-                        "members", groups_subq.c.members,
-                    )
-                ).label("groups")
-            )
-            .join(groups_subq, groups_subq.c.stage_id == Stage.id)  # INNER JOIN
-            .group_by(Stage.id, Stage.name)
-        )
-
-        result = await db.execute(stmt)
-        detail = result.mappings().all()
-
-        return detail
-        # result = await db.execute(query)
-        # detail = result.mappings().all()
-
-        # return await GroupServices.format_group_data(detail)
-    
-
-    @staticmethod
-    async def format_group_data(rows):
-        group_dict = {}
-        for row in rows:
-            sid = row.stage_id
-            gid = row.group_id
-            uid = row.user_id
-            if sid not in group_dict:
-                group_dict[sid] = {
-                    "stage_id": row.stage_id,
-                    "stage_name" : row.stage_name,
-                    "groups" : {}
-                }
-            if gid not in group_dict[sid]["groups"]:
-                group_dict[sid]["groups"][gid] = {
-                    "group_id": row.group_id,
-                    "group_name": row.group_name,
-                    "members": {}
-                }
-
-            if uid not in group_dict[sid]["groups"][gid]["members"]:
-                group_dict[sid]["groups"][gid]["members"][uid] = {
-                    "user_id": row.user_id,
-                    "username": row.username,
-                    "columns": []
-                }
-
-            group_dict[sid]["groups"][gid]["members"][uid]["columns"].append({
-                "column_id": row.column_id,
-                "column_field": row.column_name,
-                "value": row.column_value
-            })
-
-        for gdata in group_dict.values():
-            gdata["groups"] = list(gdata["groups"].values())
-            for group in gdata["groups"]:
-                group["members"] = list(group["members"].values())
-
-        return list(group_dict.values())
     
     @staticmethod
     async def create_group(db:AsyncSession, event_id : UUID, group:GroupDetail):
