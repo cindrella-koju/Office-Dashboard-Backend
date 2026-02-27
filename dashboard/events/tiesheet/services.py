@@ -1,5 +1,5 @@
 from models import StandingColumn, ColumnValues, Tiesheet, TiesheetPlayer, Stage, Group, User, Event
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, case
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from events.tiesheet.schema import StandingColumnResponse, UpdateTiesheet, TiesheetStatus, CreateTiesheet
@@ -7,6 +7,7 @@ import datetime
 from exception import HTTPInternalServer, HTTPNotFound, HTTPConflict
 from events.tiesheet.crud import get_tiesheet, check_tiesheet_exist, extract_tiesheet_player_by_tiesheet_id
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import JSON
 
 class TiesheetServices:
     @staticmethod
@@ -230,19 +231,22 @@ class TiesheetServices:
                 Tiesheet.stage_id,
                 Stage.name.label("stage_name"),
                 Tiesheet.status,
-                func.json_agg(
-                    func.json_build_object(
-                        "id", TiesheetPlayer.id,
-                        "user_id", TiesheetPlayer.user_id,
-                        "is_winner", TiesheetPlayer.is_winner,
-                        "is_tbd", TiesheetPlayer.is_tbd,
-                        "username", User.username
-                    )
+                func.coalesce(
+                    func.json_agg(
+                        func.json_build_object(
+                            "id", TiesheetPlayer.id,
+                            "user_id", TiesheetPlayer.user_id,
+                            "is_winner", TiesheetPlayer.is_winner,
+                            "is_tbd", TiesheetPlayer.is_tbd,
+                            "username", User.username,
+                        )
+                    ).filter(TiesheetPlayer.id.isnot(None)),
+                    func.cast("[]", JSON) 
                 ).label("player_info")
             )
             .join(Stage, Stage.id == Tiesheet.stage_id)
-            .join(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
-            .join(User, User.id == TiesheetPlayer.user_id)
+            .outerjoin(TiesheetPlayer, TiesheetPlayer.tiesheet_id == Tiesheet.id)
+            .outerjoin(User, User.id == TiesheetPlayer.user_id)
             .where(Stage.event_id == event_id)
             .group_by(
                 Tiesheet.id,
