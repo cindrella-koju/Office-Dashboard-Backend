@@ -235,27 +235,40 @@ class GroupServices:
     @staticmethod
     async def update_group_table_data( db : AsyncSession, group_id : UUID, table_update : GroupTableUpdate ):
         try:
+            # Collect all updates
+            updates_to_make = []
+            
             for member_data in table_update.members:
                 for column_data in member_data.columns:
-                    
-                    stmt = (
-                        update(ColumnValues)
-                        .where(
-                            ColumnValues.user_id == member_data.user_id,
-                            ColumnValues.column_id == column_data.column_id
-                        )
-                        .values(value=column_data.value)
+                    updates_to_make.append({
+                        'user_id': member_data.user_id,
+                        'column_id': column_data.column_id,
+                        'value': column_data.value
+                    })
+
+            new_entries = []
+            for item in updates_to_make:
+                stmt = (
+                    update(ColumnValues)
+                    .where(
+                        ColumnValues.user_id == item['user_id'],
+                        ColumnValues.column_id == item['column_id']
                     )
-                    result = await db.execute(stmt)
-                    
-                    # If no rows were updated, create a new entry
-                    if result.rowcount == 0:
-                        new_value = ColumnValues(
-                            user_id=member_data.user_id,
-                            column_id=column_data.column_id,
-                            value=column_data.value
-                        )
-                        db.add(new_value)
+                    .values(value=item['value'])
+                )
+                result = await db.execute(stmt)
+                
+                # If no rows updated, prepare new entry
+                if result.rowcount == 0:
+                    new_entries.append(ColumnValues(
+                        user_id=item['user_id'],
+                        column_id=item['column_id'],
+                        value=item['value']
+                    ))
+            
+            # Bulk add any new entries
+            if new_entries:
+                db.add_all(new_entries)
             
             await db.commit()
             return {

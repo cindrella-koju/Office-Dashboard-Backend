@@ -90,13 +90,12 @@ class ParticipantsServices:
     @staticmethod
     async def create_participants( db:AsyncSession, event_id : UUID, participants : Participants):
         try:
-            # 1. Insert into user_event_association (bulk)
+            user_ids = participants.user_id
+            
+            # 1. Insert into user_event_association
             association_rows = [
-                {
-                    "user_id": p,
-                    "event_id": event_id,
-                }
-                for p in participants.user_id
+                {"user_id": p, "event_id": event_id}
+                for p in user_ids
             ]
 
             await db.execute(
@@ -104,64 +103,48 @@ class ParticipantsServices:
                 association_rows
             )
 
-            print("Working 1")
             # 2. Get stage_id for round 1
             result = await db.execute(
                 select(Stage.id).where(
                     Stage.event_id == event_id,
-                ).order_by(Stage.created_at)
+                ).order_by(Stage.created_at).limit(1)
             )
-            stage_id = result.scalars().all()
+            stage_id = result.scalar_one_or_none()
 
             if not stage_id:
                 raise HTTPNotFound("Stage round 1 not found for this event")
 
-            print("Working 2")
             # 3. Get standing columns + default values
             result = await db.execute(
                 select(
                     StandingColumn.id,
                     StandingColumn.default_value
-                ).where(StandingColumn.stage_id == stage_id[0])
+                ).where(StandingColumn.stage_id == stage_id)
             )
             cols_and_vals = result.all()
             
-            print("Working 3")
-            # 4. Create ColumnValues for each user & column
+            # 4. Get role_id once
+            role_id = await get_member_role_id(db=db)
+            
+            # 5. Prepare all records
             new_col_vals = [
-                ColumnValues(
-                    user_id=p,
-                    column_id=col_id,
-                    value=default_value
-                )
-                for p in participants.user_id
+                ColumnValues(user_id=p, column_id=col_id, value=default_value)
+                for p in user_ids
                 for col_id, default_value in cols_and_vals
             ]
             
-            print("Working 4")
-            # 5. Create Round 1 qualifiers
             new_qualifiers = [
-                Qualifier(
-                    event_id=event_id,
-                    stage_id=stage_id[0],
-                    user_id=p
-                )
-                for p in participants.user_id
+                Qualifier(event_id=event_id, stage_id=stage_id, user_id=p)
+                for p in user_ids
             ]
 
-            db.add_all(new_col_vals)
-            db.add_all(new_qualifiers)
-
-            role_id = await get_member_role_id(db=db)
-            userrole = [
-                UserRole(
-                    user_id = p,
-                    event_id = event_id,
-                    role_id = role_id
-                )
-                for p in participants.user_id
+            userroles = [
+                UserRole(user_id=p, event_id=event_id, role_id=role_id)
+                for p in user_ids
             ]
-            db.add_all(userrole)
+
+            # 6. Bulk add all at once
+            db.add_all(new_col_vals + new_qualifiers + userroles)
             await db.commit()
 
             return {"message": "Participants added successfully"}

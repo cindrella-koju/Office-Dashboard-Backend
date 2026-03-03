@@ -15,6 +15,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPConflict, HTTPNotFound, HTTPInternalServer, HTTPUnauthorized
 from sqlalchemy import select,func, and_
 from users.schema import EventHistory, ProfileResponse, EditProfile, ChangePasswordDetail
+from sqlalchemy import update
+from models import User as UserModel
+
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -167,6 +170,7 @@ async def edit_user_services(db: AsyncSession, user_data, user_id: UUID):
     if not user:
         raise HTTPNotFound("User not found")
 
+    role = None
     if user_data.role_id:
         role = await get_user_role(db = db, user_id=user_id)
         if not role:
@@ -183,15 +187,23 @@ async def edit_user_services(db: AsyncSession, user_data, user_id: UUID):
         if existing_user and existing_user.id != user.id:
             raise HTTPConflict("Email already exist")
 
-    # Update fields
+    
+    update_data = {}
     if user_data.fullname:
-        user.fullname = user_data.fullname
+        update_data['fullname'] = user_data.fullname
     if user_data.username:
-        user.username = user_data.username
+        update_data['username'] = user_data.username
     if user_data.email:
-        user.email = user_data.email
-    if user_data.role_id:
-        role.role_id = user_data.role_id
+        update_data['email'] = user_data.email
+    
+    if update_data:
+        stmt = update(UserModel).where(UserModel.id == user_id).values(**update_data)
+        await db.execute(stmt)
+    
+    # Update role 
+    if user_data.role_id and role:
+        role_stmt = update(UserRole).where(UserRole.id == role.id).values(role_id=user_data.role_id)
+        await db.execute(role_stmt)
 
     await db.commit()
     return {"message": "User updated successfully"}

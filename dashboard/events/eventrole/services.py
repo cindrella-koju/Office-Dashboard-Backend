@@ -4,7 +4,7 @@ from events.eventrole.schema import createEventRole, EventRoleResponse, EditEven
 from models import UserRole, User, Role
 from sqlalchemy.exc import SQLAlchemyError
 from exception import HTTPInternalServer
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, update
 from events.eventrole.crud import extract_event_role_by_id
 
 class EventRoleServices:
@@ -81,15 +81,26 @@ class EventRoleServices:
     @staticmethod
     async def edit_event_role( db: AsyncSession, event_role_id : UUID, editeventrole : EditEventRole):
         try:
-            event_role = await extract_event_role_by_id(db=db,event_role_id=event_role_id)
+            # Verify event role exists
+            await extract_event_role_by_id(db=db, event_role_id=event_role_id)
             
-            if editeventrole.user_id != "":
-                event_role.user_id = editeventrole.user_id
+            # Build update data
+            update_data = {}
+            if editeventrole.user_id is not None and editeventrole.user_id != "":
+                update_data["user_id"] = editeventrole.user_id
+            if editeventrole.role_id is not None and editeventrole.role_id != "":
+                update_data["role_id"] = editeventrole.role_id
 
-            if editeventrole.role_id != "":
-                event_role.role_id = editeventrole.role_id
-
-            await db.commit()
+            if update_data:
+                # Use explicit SQL UPDATE for reliability
+                stmt = (
+                    update(UserRole)
+                    .where(UserRole.id == event_role_id)
+                    .values(**update_data)
+                )
+                await db.execute(stmt)
+                await db.commit()
+            
             return{
                 "message" : "Event Role updated successfully"
             }
