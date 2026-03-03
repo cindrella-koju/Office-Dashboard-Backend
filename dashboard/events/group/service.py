@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from models import Group, Stage, User, ColumnValues, GroupMembers, StandingColumn, User
 from fastapi import HTTPException, status
-from sqlalchemy import select, and_, delete, func, case, cast, Integer
+from sqlalchemy import select, and_, delete, func, case, cast, Integer, update
 from events.crud import extract_event_by_id
 from exception import HTTPNotFound
 from events.group.schema import GroupDetail, GroupUpdate, GroupTableUpdate
@@ -197,19 +197,33 @@ class GroupServices:
                                for user_id in add_members]
                 db.add_all(new_members)
 
-                # Prepare column values
+                # Prepare column values - only for users who don't already have them
                 stmt = select(StandingColumn.id.label("id"), StandingColumn.default_value.label("value")) \
                        .where(StandingColumn.stage_id == stage_id)
                 result = await db.execute(stmt)
                 columns = result.mappings().all()
 
-                if columns:
+                if columns and add_members:
+                    # Check existing column values for these users
+                    existing_stmt = select(
+                        ColumnValues.user_id,
+                        ColumnValues.column_id
+                    ).where(
+                        ColumnValues.user_id.in_(add_members),
+                        ColumnValues.column_id.in_([col['id'] for col in columns])
+                    )
+                    existing_result = await db.execute(existing_stmt)
+                    existing_pairs = set((row.user_id, row.column_id) for row in existing_result)
+                    
+                    # Only create column values that don't already exist
                     column_values = [
                         ColumnValues(user_id=user_id, column_id=col['id'], value=col['value'])
                         for user_id in add_members
                         for col in columns
+                        if (user_id, col['id']) not in existing_pairs
                     ]
-                    db.add_all(column_values)
+                    if column_values:
+                        db.add_all(column_values)
 
             await db.commit()
             return {"message": f"Group '{group.name}' updated successfully"}
@@ -223,19 +237,19 @@ class GroupServices:
         try:
             for member_data in table_update.members:
                 for column_data in member_data.columns:
-                    # Check if column value exists
-                    stmt = select(ColumnValues).where(
-                        ColumnValues.user_id == member_data.user_id,
-                        ColumnValues.column_id == column_data.column_id
+                    
+                    stmt = (
+                        update(ColumnValues)
+                        .where(
+                            ColumnValues.user_id == member_data.user_id,
+                            ColumnValues.column_id == column_data.column_id
+                        )
+                        .values(value=column_data.value)
                     )
                     result = await db.execute(stmt)
-                    existing_value = result.scalar_one_or_none()
-
-                    if existing_value:
-                        # Update existing value
-                        existing_value.value = column_data.value
-                    else:
-                        # Create new column value
+                    
+                    # If no rows were updated, create a new entry
+                    if result.rowcount == 0:
                         new_value = ColumnValues(
                             user_id=member_data.user_id,
                             column_id=column_data.column_id,
