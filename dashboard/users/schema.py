@@ -65,3 +65,10 @@ class EditProfile(BaseModel):
 class ChangePasswordDetail(BaseModel):
     oldpassword : str
     newpassword : str
+
+class CurrentUserRoleResponse(BaseModel):
+    role_id: str
+    role: str
+    
+    class Config:
+        from_attributes = True

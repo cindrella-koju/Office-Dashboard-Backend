@@ -40,7 +40,7 @@ class GroupServices:
             event = await extract_event_by_id(db=db, event_id=event_id)
             if not event:
                 raise HTTPException(status_code=404, detail="Event not found")
-
+   
             # Columns per user per stage
             columns_subq = (
                 select(

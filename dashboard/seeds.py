@@ -46,7 +46,7 @@ async def seed():
             await db.flush()
 
             super_admin_user = User(
-                username="teslatech admin",
+                username="teslatechsuperadmin",
                 fullname="Teslatech",
                 email="superadmin.teslatech@gmail.com",
                 password= await get_password_hash("Teslatech@superadmin")

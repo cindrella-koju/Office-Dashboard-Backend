@@ -1,10 +1,10 @@
 from fastapi import APIRouter,Depends, Query
-from users.schema import UserDetail, EditProfile, LoginUser, EditUserDetail, RefreshTokenRequest, TokenResponse, ChangePasswordDetail
-from models import User
+from users.schema import UserDetail, EditProfile, LoginUser, EditUserDetail, RefreshTokenRequest, TokenResponse, ChangePasswordDetail, CurrentUserRoleResponse
+from models import Role, User, UserRole
 from db_connect import get_db_session
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from uuid import UUID
 from users.services import login_user_service, signup_user_services, edit_user_services, refresh_access_token_service, home_page_services, profile_page_services, edit_profile_services, change_password_services
 from users.crud import get_user_by_role, get_user_by_user_id
@@ -134,3 +134,33 @@ async def edit_profile(
     user_id = UUID(current_user["sub"])
 
     return await edit_profile_services(db=db, user_detail=user_detail, user_id=user_id)
+
+
+
+@router.get("/current-role")
+async def get_current_user_role(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: dict = Depends(get_current_user),
+):
+    stmt = (
+        select(
+            Role.id.label("role_id"),
+            Role.rolename
+        )
+        .select_from(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, UserRole.role_id == Role.id)
+        .where(UserRole.event_id.is_(None))
+        .where(User.id == UUID(current_user["sub"]))
+    )
+
+    result = await db.execute(stmt)
+    user = result.mappings().first()
+
+    if not user:
+        raise HTTPNotFound("User not found")
+
+    return CurrentUserRoleResponse(
+        role_id=str(user["role_id"]),
+        role=user["rolename"]
+    )

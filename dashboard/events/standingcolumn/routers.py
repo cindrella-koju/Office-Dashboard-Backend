@@ -53,3 +53,15 @@ async def create_value(value_detail : CreateValues, db : Annotated[AsyncSession,
     return{
         "message" : "Value added successfully"
     }
+
+@router.delete("/{column_id}")
+async def delete_column(column_id : UUID,db : Annotated[AsyncSession,Depends(get_db_session)]):
+    column = await extract_column_by_id(db=db, column_id=column_id)
+
+    stmt = delete(StandingColumn).where(StandingColumn.id == column_id)
+    await db.execute(stmt)
+    await db.commit()
+
+    return {
+        "message" : f"Column {column.column_field} deleted successfully"
+    }
